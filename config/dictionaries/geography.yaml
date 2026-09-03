@@ -1,0 +1,18 @@
+# canonical region -> raw Airtable "Based at:" values.
+# Near-identity today; the file exists so a future spelling variant (e.g. "United
+# States") is a YAML edit, not a code change. Blank values are mapped to "Unknown"
+# in normalize.py, not here, since a blank isn't a raw value to alias.
+"USA":
+  - USA
+"Europe":
+  - Europe
+"China":
+  - China
+"Asia":
+  - Asia
+"Canada":
+  - Canada
+"Australia":
+  - Australia
+"Israel":
+  - Israel

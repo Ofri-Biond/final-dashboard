@@ -1,0 +1,78 @@
+# canonical group -> raw Airtable values that roll into it.
+# Matching is case-insensitive and trim-insensitive. Anything not listed here passes
+# through under its own raw label and is logged to data/unmapped_values.csv -- never
+# dropped, never bucketed into "Other". Review that log with Tal before adding aliases.
+"Antibody Drug Conjugate":
+  - Antibody Drug Conjugate
+  - ADC
+  - ADCs
+  - Bispecific ADC
+  - Multispecific ADC
+"Multi-specific engager":
+  - Bispecific antibody
+  - Trispecific
+  - Multispecific antibody
+  - Multispecific engagers
+  - Cell engager - T cell
+  - Cell engager - NK
+  - Cell engager - B cell
+  - Myeloid Engager
+  - Bispecific Macrophage Engager
+  - Diakines
+"CAR therapy":
+  - CAR T cells
+  - Autologous CAR T
+  - Allogeneic CAR-T
+  - Allogeneic T cells
+  - In vivo CAR-T cell therapy
+  - CAR NK cells
+  - NK cell therapy
+  - TIL
+  - TILs
+  - TCR
+  - recombinant TCR
+"Protein degrader":
+  - Protein degrader
+  - Molecular Glue
+  - Degrader-Antibody Conjugate
+  - RIPTAC
+"Small molecule":
+  - Small Molecule
+  - Covalent medicine
+  - TKI
+"Monoclonal antibody":
+  - Monoclonal antibody
+  - Antibodies
+  - IgM Antibodies
+  - Nanobody
+  - Biparatopic Nanobody
+  - antibody like
+"Radiotherapy":
+  - Radiotherapy
+"Vaccine":
+  - Vaccine
+  - RNA vaccine
+"Fusion protein":
+  - Fusion Protein
+  - FC fusion
+  - engineered protein
+  - Engineered recombinant protein
+"Peptide":
+  - Peptide
+  - Macrocyclic peptide
+  - Stapled peptides
+  - Alpha helical peptides
+  - Helicon peptides
+  - bicyclic peptide
+  - minipeptides
+  - Miniprotein
+"Oncolytic virus":
+  - oncolytic virus
+"Platform":
+  - Platform
+  - Drug discovery
+  - Drug discovery platform
+  - AI
+  - Imaging platform
+  - Proteomics
+  - Mass spectrometry

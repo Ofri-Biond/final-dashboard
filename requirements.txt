@@ -1,0 +1,12 @@
+# streamlit>=1.52 for widget `bind="query-params"` and st.metric(chart_data=...).
+# plotly>=6 for bar marker.cornerradius. Both are load-bearing in assets/theme.py
+# and components/, so they are pinned rather than left floating.
+streamlit>=1.52
+plotly>=6.0
+requests
+pandas
+pyarrow
+python-dotenv
+pyyaml
+pytest
+ruff

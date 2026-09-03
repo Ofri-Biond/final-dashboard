@@ -1,0 +1,33 @@
+# canonical phase (must be one of lib.models.PHASE_ORDER) -> raw Airtable
+# "Development Phase on deal" values. Unmapped values fall back to "Unspecified"
+# in normalize.py and sort last -- never dropped.
+"Discovery":
+  - Discovery
+"Preclinical":
+  - Preclinical
+  - Preclinical / Phase 1   # earliest-of-the-two, conservative -- flag for Tal
+"IND":
+  - IND
+  - IND-enabling
+"Phase 1":
+  - Phase 1
+  - Phase 1b
+"Phase 1/2":
+  - Phase 1/2
+  - Phase 1b/2
+"Phase 2":
+  - Phase 2
+"Phase 2/3":
+  - Phase 2/3
+"Phase 3":
+  - Phase 3
+"Submitted":
+  - Submitted for approval
+"Approved":
+  - Approved
+"Marketed":
+  - Marketed locally
+"Unspecified":
+  - Unspecified
+  - Clinical stage
+  - Series B   # data-entry error in source table, not a real phase

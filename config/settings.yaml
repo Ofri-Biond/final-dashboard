@@ -1,0 +1,3 @@
+# Non-secret configuration. Secrets (PAT, base id, API keys) live in .env.
+airtable_table_id: tbl5kxt5HulDH17S9  # "Imported table copy" -- 673 rows / 38 fields, matches the PRD's target table
+cache_dir: data/cache

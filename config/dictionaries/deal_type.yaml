@@ -1,0 +1,22 @@
+# canonical group -> raw Airtable "Deal Type" values that roll into it.
+# Matches slide 16's 5 groups. Unmapped values pass through and are logged.
+"M&A":
+  - M&A
+  - Asset Acquisition
+  - Reverse merger
+"License":
+  - License
+  - Option to license
+  - Co-development
+  - Research Collaboration
+  - Local Commercialization rights
+"Investment":
+  - Investment
+"IPO":
+  - IPO
+"Other":
+  - Internal pipeline
+  - Spinout
+  - Patent Settlement
+  - Royalty transaction
+  - Option to acquire

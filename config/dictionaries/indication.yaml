@@ -1,0 +1,34 @@
+# canonical therapeutic area -> raw Airtable "Indication" values.
+# Conservative rollup: only unambiguous merges. Oncology, Immuno-oncology and Blood
+# cancer are left separate on purpose, pending Tal's call on whether to fold them.
+"INI":
+  - INI
+  - Immunology
+  - Inflammatory disease
+  - Autoimmune diseases
+"Oncology":
+  - Oncology
+"Immuno-oncology":
+  - Immuno-oncology
+"Blood cancer":
+  - Blood cancer
+"Neurology":
+  - Neurology
+"Rare diseases":
+  - Rare diseases
+"Cardio":
+  - Cardio
+"Metabolics":
+  - Metabolics
+"Cell therapy":
+  - Cell therapy
+"Genetic":
+  - Genetic
+"Muscle disease":
+  - Muscle disease
+"Ocular Diseases":
+  - Ocular Diseases
+"General":
+  - General
+"Respiratory":
+  - Respiratory
