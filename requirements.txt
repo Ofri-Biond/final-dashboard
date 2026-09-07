@@ -10,3 +10,5 @@ python-dotenv
 pyyaml
 pytest
 ruff
+# openpyxl: engine for the per-chart Excel export via pd.ExcelWriter.
+openpyxl

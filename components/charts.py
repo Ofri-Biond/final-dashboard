@@ -9,7 +9,7 @@ import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-from assets.theme import SLATE
+from assets.theme import SLATE, TEAL
 from lib.aggregate import Aggregate, group_column
 
 _OTHER_LABEL = "Other"
@@ -63,7 +63,7 @@ def stacked_share(agg: Aggregate, x: str, color: str) -> go.Figure:
     for category in agg.frame[color].unique():
         subset = agg.frame[agg.frame[color] == category].sort_values(x)
         fig.add_trace(go.Bar(x=subset[x].map(_label), y=subset["value"], name=str(category)))
-    fig.update_layout(barmode="stack", yaxis_title="% of deals")
+    fig.update_layout(barmode="stack", xaxis_title="Year", yaxis_title="% of deals")
     return fig
 
 
@@ -90,13 +90,18 @@ def paired_ranked_bars(count_agg: Aggregate, value_agg: Aggregate) -> go.Figure:
     value_by_category = value_agg.frame.set_index(value_col)["value"]
     aligned_values = [value_by_category.get(c) for c in categories]
 
-    fig = make_subplots(rows=1, cols=2, shared_yaxes=True, horizontal_spacing=0.05)
+    fig = make_subplots(
+        rows=1, cols=2, shared_yaxes=True, horizontal_spacing=0.05,
+        subplot_titles=("Deal count", "Disclosed value ($M)"),
+    )
     fig.add_trace(
         go.Bar(x=ordered["value"], y=categories, orientation="h", name="Count"), row=1, col=1
     )
     fig.add_trace(
         go.Bar(x=aligned_values, y=categories, orientation="h", name="Value"), row=1, col=2
     )
+    fig.update_xaxes(title_text="Deals", row=1, col=1)
+    fig.update_xaxes(title_text="Disclosed value ($M)", row=1, col=2)
     fig.update_layout(showlegend=False)
     return fig
 
@@ -114,25 +119,40 @@ def donut(agg: Aggregate, max_slices: int = 5) -> go.Figure:
         other_row = pd.DataFrame({group_col: [_OTHER_LABEL], "value": [other_total]})
         ranked = pd.concat([head, other_row], ignore_index=True)
 
-    return go.Figure(go.Pie(labels=ranked[group_col], values=ranked["value"]))
+    return go.Figure(
+        go.Pie(
+            labels=ranked[group_col],
+            values=ranked["value"],
+            hovertemplate="%{label}: %{value} (%{percent})<extra></extra>",
+        )
+    )
 
 
-def activity_grid(agg: Aggregate, index: str, columns: str) -> go.Figure:
+def activity_grid(agg: Aggregate, index: str, columns: str, accent: str = TEAL) -> go.Figure:
     """Company x year (or similar) heatmap. `agg` is a count aggregate -- 0 is a
     legitimate value here (no deals that period), unlike money aggregates.
+
+    Color encodes each cell's count as a share of the grid's busiest cell (so the
+    scale stays meaningful regardless of how active the top company is), while
+    `customdata`+`hovertemplate` keep the real count discoverable on hover.
     """
     pivot = agg.frame.pivot(index=index, columns=columns, values="value").fillna(0)
+    peak = pivot.values.max() if pivot.values.size else 0
+    peak = peak or 1
     fig = go.Figure(
         go.Heatmap(
-            z=pivot.values,
+            z=pivot.values / peak,
             x=[_label(c) for c in pivot.columns],
             y=pivot.index,
-            colorscale=[[0, "#FFFFFF"], [1, "#2E86A0"]],
-            showscale=False,
+            customdata=pivot.values,
+            hovertemplate="%{y} — %{x}: %{customdata:.0f} deals<extra></extra>",
+            colorscale=[[0, "#FFFFFF"], [1, accent]],
+            colorbar=dict(title="Share of peak", tickformat=".0%"),
             xgap=2,
             ygap=2,
         )
     )
-    fig.update_yaxes(autorange="reversed")
+    fig.update_xaxes(title_text="Year")
+    fig.update_yaxes(title_text="Collaborator", autorange="reversed")
     fig.update_layout(font=dict(color=SLATE))
     return fig

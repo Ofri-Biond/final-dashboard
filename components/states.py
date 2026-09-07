@@ -9,6 +9,7 @@ import streamlit as st
 
 from assets.theme import PLOTLY_CONFIG
 from lib.aggregate import Coverage
+from lib.export import to_excel_bytes
 from lib.filters import FilterState
 
 
@@ -18,6 +19,20 @@ def plot(fig: go.Figure, key: str) -> None:
 
 def finding(sentence: str) -> None:
     st.markdown(f"**{sentence}**")
+
+
+def download_button(sheets: dict[str, pd.DataFrame], filename: str, key: str) -> None:
+    """A small Excel-export affordance for a chart's underlying data, one sheet
+    per frame in `sheets` (e.g. {"Deal count": ..., "Disclosed value": ...}).
+    """
+    st.download_button(
+        "Export",
+        data=to_excel_bytes(sheets),
+        file_name=f"{filename}.xlsx",
+        icon=":material/download:",
+        key=f"{key}_xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
 
 
 def coverage_caption(coverage: Coverage) -> None:

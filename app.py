@@ -11,7 +11,6 @@ from lib.data import load_deals
 from lib.filters import apply_filters, most_restrictive, previous_period
 
 st.set_page_config(page_title="Biond BD Intelligence Dashboard", layout="wide")
-register_theme()
 
 require_auth()
 
@@ -22,6 +21,7 @@ st.title("Biond BD Intelligence Dashboard")
 
 deals = load_deals()
 filters = render_sidebar(deals)
+register_theme(st.session_state.get("chart_palette", "Default"))
 filtered = apply_filters(deals, filters)
 
 if filtered.empty:

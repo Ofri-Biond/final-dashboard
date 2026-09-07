@@ -74,3 +74,24 @@ def test_activity_grid_pivots_to_a_company_by_year_matrix():
     heatmap = fig.data[0]
     assert set(heatmap.x) == {"2023", "2024"}
     assert set(heatmap.y) == {"Pfizer", "Roche"}
+
+
+def test_activity_grid_normalizes_color_but_keeps_raw_counts_for_hover():
+    frame = pd.DataFrame(
+        {
+            "collaborators": ["Pfizer", "Pfizer", "Roche"],
+            "year": [2023, 2024, 2023],
+            "value": [2, 1, 3],
+        }
+    )
+    fig = charts.activity_grid(_agg(frame), index="collaborators", columns="year")
+    heatmap = fig.data[0]
+    assert heatmap.z.max() == 1.0  # normalized to the busiest cell (Roche/2023's 3 deals)
+    assert heatmap.z.min() >= 0.0
+    assert set(heatmap.customdata.flatten()) == {0.0, 1.0, 2.0, 3.0}
+
+
+def test_activity_grid_handles_an_empty_segment_without_raising():
+    frame = pd.DataFrame({"collaborators": [], "year": [], "value": []})
+    fig = charts.activity_grid(_agg(frame), index="collaborators", columns="year")
+    assert list(fig.data[0].x) == []

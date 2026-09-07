@@ -16,6 +16,17 @@ GRIDLINE = "#E8EDEF"
 
 PALETTE = [TEAL, LIME, SLATE, AMBER, "#7FB3C4", "#8FA332"]
 
+# Okabe-Ito: designed to stay distinguishable under the common forms of color
+# blindness (protanopia/deuteranopia/tritanopia).
+_COLORBLIND_SAFE = [
+    "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#054971", "#D52700",
+]
+
+PALETTES: dict[str, list[str]] = {
+    "Default": PALETTE,
+    "Colorblind-safe": _COLORBLIND_SAFE,
+}
+
 LOGO_PATH = Path(__file__).resolve().parent / "biond_logo.png"
 
 PLOTLY_CONFIG = {
@@ -38,13 +49,13 @@ _AXIS = dict(
 _YAXIS = {**_AXIS, "showgrid": True, "gridcolor": GRIDLINE, "linecolor": "rgba(0,0,0,0)"}
 
 
-def _build_template() -> go.layout.Template:
+def _build_template(palette_name: str) -> go.layout.Template:
     template = go.layout.Template()
     template.layout = go.Layout(
         font=dict(family="sans-serif", color=INK, size=13),
         paper_bgcolor=PAPER,
         plot_bgcolor=CARD,
-        colorway=PALETTE,
+        colorway=PALETTES.get(palette_name, PALETTE),
         xaxis=_AXIS,
         yaxis=_YAXIS,
         margin=dict(l=40, r=20, t=40, b=40),
@@ -57,7 +68,18 @@ def _build_template() -> go.layout.Template:
     return template
 
 
-def register() -> None:
-    """Register the "biond" template and make it the default. Call once at app start."""
-    pio.templates["biond"] = _build_template()
+def register(palette_name: str = "Default") -> None:
+    """Register the "biond" template and make it the default. Call once at app start
+    (or again after the user picks a different `palette_name`).
+    """
+    pio.templates["biond"] = _build_template(palette_name)
     pio.templates.default = "biond"
+
+
+def primary_color() -> str:
+    """The active palette's lead color, for single-hue scales (e.g. the activity
+    heatmap) that should track the user's palette choice rather than a fixed color.
+    """
+    if "biond" not in pio.templates:
+        return TEAL
+    return pio.templates["biond"].layout.colorway[0]
