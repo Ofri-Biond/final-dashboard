@@ -146,6 +146,14 @@ def load_cached_brief(key: str) -> Brief | None:
     return _payload_to_brief(payload) if payload else None
 
 
+def cached_brief_for(fact_pack: dict, extras: list[dict]) -> Brief | None:
+    """The cached brief for this exact view, or None if one hasn't been
+    generated yet -- the single "is a brief cached for this view" check shared
+    by components/brief_card.py and the downloadable report (lib/report.py).
+    """
+    return load_cached_brief(brief_key(fact_pack, extras))
+
+
 def _collect_allowed_numbers(value, out: set[float]) -> None:
     """Recursively harvest every numeric leaf in the (already-coerced) fact
     pack, plus the length of every list -- so "top 5" or "3 of the 4" are

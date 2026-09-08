@@ -332,6 +332,12 @@ def _share_shift(current_df: pd.DataFrame, prior_df: pd.DataFrame, column: str, 
 
 
 def _phase_shift(df_filtered: pd.DataFrame) -> dict | None:
+    if df_filtered.empty:
+        # An empty boolean mask built from .apply() on a 0-row Series comes back
+        # object-dtype, not bool -- df_filtered[mask] then reads as "select these
+        # (zero) column labels" rather than "keep these (zero) rows", collapsing
+        # license_deals to zero columns and breaking the "phase" lookup below.
+        return None
     license_deals = df_filtered[
         df_filtered["deal_type_groups"].apply(lambda groups: "License" in groups)
     ]

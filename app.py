@@ -6,6 +6,7 @@ from components.auth import require_auth
 from components.brief_card import render_brief
 from components.filters_sidebar import render_sidebar
 from components.kpis import render_kpis
+from components.report_ui import render_report_download
 from components.sections import render_raw_data, render_sections
 from components.states import empty_state
 from lib.data import load_deals
@@ -24,6 +25,9 @@ deals = load_deals()
 filters = render_sidebar(deals)
 register_theme(st.session_state.get("chart_palette", "Default"))
 filtered = apply_filters(deals, filters)
+
+with st.sidebar:
+    render_report_download(filtered, deals, filters)
 
 if filtered.empty:
     empty_state(most_restrictive(deals, filters))

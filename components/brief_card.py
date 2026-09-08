@@ -14,10 +14,9 @@ import streamlit as st
 from lib.brief import (
     Brief,
     BriefUnavailable,
-    brief_key,
+    cached_brief_for,
     generate_brief,
     is_configured,
-    load_cached_brief,
 )
 from lib.extras import get_extras_context
 from lib.facts import build_fact_pack, snapshot_lines
@@ -76,8 +75,7 @@ def render_brief(df_filtered: pd.DataFrame, df_all: pd.DataFrame, filters: Filte
 
         extras = get_extras_context(df_filtered, filters)
         fact_pack = build_fact_pack(df_filtered, df_all, filters)
-        key = brief_key(fact_pack, extras)
-        cached = load_cached_brief(key)
+        cached = cached_brief_for(fact_pack, extras)
 
         if cached is not None:
             _render_brief(cached, extras, filters)

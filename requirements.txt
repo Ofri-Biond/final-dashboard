@@ -14,3 +14,7 @@ ruff
 anthropic>=0.122
 # openpyxl: engine for the per-chart Excel export via pd.ExcelWriter.
 openpyxl
+# kaleido: static PNG export of Plotly figures for the PDF report (lib/report.py).
+kaleido
+# reportlab: PDF layout/assembly for the downloadable report (lib/report.py).
+reportlab

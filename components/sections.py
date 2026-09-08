@@ -1,30 +1,30 @@
 """The three chart sections and the raw-data expander. Each chart is the same
 unit: a finding sentence (with an Excel export alongside it), the figure, and
-(money charts only) a coverage caption. No aggregation happens here -- every
-number comes from lib.aggregate.
+(money charts only) a coverage caption. Chart/finding/coverage construction
+lives in lib.report_data, shared with the downloadable report (lib/report.py)
+so the two can never disagree about a chart's data.
 """
 
 import pandas as pd
 import streamlit as st
 
-from assets import theme
-from components import charts, states
-from lib.aggregate import Aggregate, aggregate, share, top_n
+from components import states
 from lib.filters import FilterState, apply_filters
-from lib.findings import concentration_finding, leader_finding, mix_finding, trend_finding
+from lib.report_data import (
+    ChartPanel,
+    build_landscape_panels,
+    build_players_panels,
+    build_trending_panels,
+)
 
-_TOP_N = 10
-_TOP_COMPANIES_IN_GRID = 15
 
-
-def _finding_with_export(
-    sentence: str, sheets: dict[str, pd.DataFrame], filename: str, key: str
-) -> None:
+def _render_panel(panel: ChartPanel) -> None:
     text_col, export_col = st.columns([0.85, 0.15])
     with text_col:
-        states.finding(sentence)
+        states.finding(panel.finding)
     with export_col:
-        states.download_button(sheets, filename, key)
+        states.download_button(panel.export_sheets, panel.export_filename, panel.key)
+    states.plot(panel.figure, key=panel.key)
 
 
 def _render_trending_section(df: pd.DataFrame, filters: FilterState) -> None:
@@ -32,30 +32,12 @@ def _render_trending_section(df: pd.DataFrame, filters: FilterState) -> None:
     st.caption("Deal volume and disclosed value by year, and how the deal-type mix has shifted.")
     left, right = st.columns([3, 2])
 
+    trend_panel, mix_panel = build_trending_panels(df, filters)
     with left:
-        counts = aggregate(df, by="year", measure="count")
-        values = aggregate(
-            df, by="year", measure="sum", value_col="total_musd",
-            exclude_mega=filters.exclude_mega_deals,
-        )
-        _finding_with_export(
-            trend_finding(counts, "Deal count"),
-            {"Deal count": counts.frame, "Disclosed value ($M)": values.frame},
-            "deal_trend", "trend",
-        )
-        states.plot(
-            charts.trend_bars_and_value(counts, values, "Deals", "Disclosed value ($M)"),
-            key="trend",
-        )
-        states.coverage_caption(values.coverage)
-
+        _render_panel(trend_panel)
+        states.coverage_caption(trend_panel.coverage)
     with right:
-        by_type_year = aggregate(df, by="deal_type_groups", measure="count", year_col="year")
-        mix = share(by_type_year, within="year")
-        _finding_with_export(
-            mix_finding(mix, within="year"), {"Deal type mix": mix.frame}, "deal_type_mix", "mix",
-        )
-        states.plot(charts.stacked_share(mix, x="year", color="deal_type_groups"), key="mix")
+        _render_panel(mix_panel)
 
 
 def _render_landscape_section(df: pd.DataFrame, filters: FilterState) -> None:
@@ -63,66 +45,24 @@ def _render_landscape_section(df: pd.DataFrame, filters: FilterState) -> None:
     st.caption("Therapeutic areas, technologies, and where deals are happening.")
     area_col, tech_col, geo_col = st.columns(3)
 
+    areas_panel, tech_panel, geo_panel = build_landscape_panels(df, filters)
     with area_col:
-        areas = top_n(aggregate(df, by="indications", measure="count"), n=_TOP_N)
-        _finding_with_export(
-            leader_finding(areas, "deals"), {"Top indications": areas.frame},
-            "top_indications", "areas",
-        )
-        states.plot(charts.ranked_bars(areas, "Deals"), key="areas")
-
+        _render_panel(areas_panel)
     with tech_col:
-        tech_counts = top_n(aggregate(df, by="technologies", measure="count"), n=_TOP_N)
-        tech_values = aggregate(
-            df, by="technologies", measure="sum", value_col="total_musd",
-            exclude_mega=filters.exclude_mega_deals,
-        )
-        _finding_with_export(
-            leader_finding(tech_counts, "deals"),
-            {"Deal count": tech_counts.frame, "Disclosed value ($M)": tech_values.frame},
-            "technology_deals", "tech",
-        )
-        states.plot(charts.paired_ranked_bars(tech_counts, tech_values), key="tech")
-        states.coverage_caption(tech_values.coverage)
-
+        _render_panel(tech_panel)
+        states.coverage_caption(tech_panel.coverage)
     with geo_col:
-        geography = aggregate(df, by="based_at", measure="count")
-        _finding_with_export(
-            concentration_finding(geography, "regions"), {"Deals by geography": geography.frame},
-            "deals_by_geography", "geo",
-        )
-        states.plot(charts.donut(geography), key="geo")
+        _render_panel(geo_panel)
 
 
 def _render_players_subsection(df: pd.DataFrame, label: str, key_prefix: str) -> None:
     left, right = st.columns([2, 3])
-    totals = aggregate(df, by="collaborators", measure="count")
+    top_panel, grid_panel = build_players_panels(df, label, key_prefix)
 
     with left:
-        players = top_n(totals, n=_TOP_N)
-        _finding_with_export(
-            leader_finding(players, "deals"), {f"Top {label}": players.frame},
-            f"top_{key_prefix}", f"{key_prefix}_players",
-        )
-        states.plot(charts.ranked_bars(players, "Deals"), key=f"{key_prefix}_players")
-
+        _render_panel(top_panel)
     with right:
-        by_year = aggregate(df, by="collaborators", measure="count", year_col="year")
-        top_companies = set(top_n(totals, n=_TOP_COMPANIES_IN_GRID).frame["collaborators"])
-        grid = Aggregate(
-            frame=by_year.frame[by_year.frame["collaborators"].isin(top_companies)],
-            coverage=by_year.coverage,
-        )
-        _finding_with_export(
-            concentration_finding(totals, "players"), {f"{label} activity by year": grid.frame},
-            f"{key_prefix}_activity", f"{key_prefix}_grid",
-        )
-        states.plot(
-            charts.activity_grid(
-                grid, index="collaborators", columns="year", accent=theme.primary_color(),
-            ),
-            key=f"{key_prefix}_grid",
-        )
+        _render_panel(grid_panel)
         st.caption(
             "Color shows each cell's deal count as a share of the busiest cell shown here "
             "(count ÷ peak count); hover a cell for the exact number of deals."
