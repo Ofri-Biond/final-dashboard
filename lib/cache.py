@@ -7,13 +7,16 @@ import pandas as pd
 from lib.models import SyncState
 
 RAW_RECORDS_FILENAME = "deals_raw.parquet"
+EXTRAS_RECORDS_FILENAME = "extras_raw.parquet"
 SYNC_STATE_FILENAME = "sync_state.json"
 
 
-def save_raw_records(records: list[dict], cache_dir: Path) -> None:
+def save_raw_records(
+    records: list[dict], cache_dir: Path, filename: str = RAW_RECORDS_FILENAME
+) -> None:
     cache_dir.mkdir(parents=True, exist_ok=True)
     rows = [{"record_id": r["id"], **r["fields"]} for r in records]
-    pd.DataFrame(rows).to_parquet(cache_dir / RAW_RECORDS_FILENAME, index=False)
+    pd.DataFrame(rows).to_parquet(cache_dir / filename, index=False)
 
 
 def save_sync_state(state: SyncState, cache_dir: Path) -> None:

@@ -15,8 +15,15 @@ class Dictionary:
                 self._canonical_by_raw[raw.strip().lower()] = canonical
         self.unmapped: Counter[str] = Counter()
 
+    def lookup(self, raw: str) -> str | None:
+        """Like `map`, but a miss returns None instead of the raw value, and is
+        never recorded in `unmapped` -- for callers (e.g. news intelligence) whose
+        vocabulary shouldn't pollute the deals-table review log.
+        """
+        return self._canonical_by_raw.get(raw.strip().lower())
+
     def map(self, raw: str) -> str:
-        canonical = self._canonical_by_raw.get(raw.strip().lower())
+        canonical = self.lookup(raw)
         if canonical is None:
             self.unmapped[raw] += 1
             return raw

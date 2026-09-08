@@ -3,6 +3,7 @@ import streamlit as st
 from assets.theme import LOGO_PATH
 from assets.theme import register as register_theme
 from components.auth import require_auth
+from components.brief_card import render_brief
 from components.filters_sidebar import render_sidebar
 from components.kpis import render_kpis
 from components.sections import render_raw_data, render_sections
@@ -33,5 +34,6 @@ prev_filters = previous_period(filters, data_years)
 prev_deals = apply_filters(deals, prev_filters) if prev_filters is not None else None
 
 render_kpis(filtered, prev_deals, filters)
+render_brief(filtered, deals, filters)
 render_sections(filtered, filters)
 render_raw_data(filtered)

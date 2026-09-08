@@ -14,6 +14,7 @@ class Settings:
     airtable_pat: str
     airtable_base_id: str
     airtable_table_id: str
+    airtable_extras_table_id: str
     cache_dir: Path
 
 
@@ -41,5 +42,6 @@ def load_settings() -> Settings:
         airtable_pat=_secret("AIRTABLE_PAT"),
         airtable_base_id=_secret("AIRTABLE_BASE_ID"),
         airtable_table_id=config["airtable_table_id"],
+        airtable_extras_table_id=config["airtable_extras_table_id"],
         cache_dir=REPO_ROOT / config["cache_dir"],
     )

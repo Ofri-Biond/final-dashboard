@@ -15,7 +15,7 @@ import streamlit as st
 
 from assets import theme
 from components.states import clear_filters
-from lib.data import get_sync_state, load_deals, sync_now
+from lib.data import get_sync_state, load_deals, load_extras, sync_extras_now, sync_now
 from lib.filters import FilterState, apply_filters
 from lib.models import PHASE_ORDER
 
@@ -114,5 +114,7 @@ def _render_freshness() -> None:
     if st.button("Refresh"):
         with st.spinner("Syncing..."):
             sync_now()
+            sync_extras_now()
         load_deals.clear()
+        load_extras.clear()
         st.rerun()

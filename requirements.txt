@@ -10,5 +10,7 @@ python-dotenv
 pyyaml
 pytest
 ruff
+# anthropic: the AI Market Brief (lib/brief.py), via output_config structured outputs.
+anthropic>=0.122
 # openpyxl: engine for the per-chart Excel export via pd.ExcelWriter.
 openpyxl

@@ -140,6 +140,33 @@ def previous_period(filters: FilterState, data_years: tuple[int, int]) -> Filter
     return replace(filters, years=tuple(range(prev_start, prev_end + 1)))
 
 
+_DESCRIBE_MAX_VALUES = 4
+
+
+def describe(filters: FilterState) -> str:
+    """A one-line human summary of the active filters, e.g. "Technology: CAR T
+    cells; Year: 2020, 2024" -- for the AI brief footer, so it can say exactly
+    what view a cached brief was generated for. Values are sorted (years/labels
+    alike) so the same filter selection always describes the same way,
+    regardless of the order widgets were touched in.
+    """
+    parts = []
+    for state_field in _MULTISELECT_FIELDS:
+        values = getattr(filters, state_field)
+        if not values:
+            continue
+        shown = sorted(values, key=str)
+        text = ", ".join(str(v) for v in shown[:_DESCRIBE_MAX_VALUES])
+        if len(shown) > _DESCRIBE_MAX_VALUES:
+            text += f" (+{len(shown) - _DESCRIBE_MAX_VALUES} more)"
+        parts.append(f"{_FIELD_LABELS[state_field]}: {text}")
+
+    if not filters.exclude_mega_deals:
+        parts.append("Mega-deals included")
+
+    return "; ".join(parts) if parts else "No filters (all deals)"
+
+
 def most_restrictive(df: pd.DataFrame, filters: FilterState, n: int = 2) -> list[str]:
     """Labels of the `n` active filters that, applied alone, remove the most rows --
     the two "culprit filters" named in the empty-state message.

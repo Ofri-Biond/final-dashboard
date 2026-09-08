@@ -58,3 +58,24 @@ def make_raw_row(**overrides) -> dict:
 
 def raw_frame(*rows: dict) -> pd.DataFrame:
     return pd.DataFrame(list(rows))
+
+
+def make_extras_row(**overrides) -> dict:
+    """A minimal raw Extras-table row; overrides replace individual fields."""
+    row = {
+        "record_id": "extra1",
+        "Title": "sample readout",
+        "URL": "https://example.com/sample",
+        "Date": "2026-08-15",
+        "Why it matters": "A sample news item for tests.",
+        "Score": 0.5,
+        "Companies mentioned": np.array(["BigPharma"], dtype=object),
+        "Category": "readout",
+        "Technology": '["Bispecific antibody"]',
+    }
+    row.update(overrides)
+    return row
+
+
+def extras_frame(*rows: dict) -> pd.DataFrame:
+    return pd.DataFrame(list(rows))

@@ -5,9 +5,16 @@ import pandas as pd
 import streamlit as st
 
 from lib.airtable import AirtableClient
-from lib.cache import RAW_RECORDS_FILENAME, load_sync_state, save_raw_records, save_sync_state
+from lib.cache import (
+    EXTRAS_RECORDS_FILENAME,
+    RAW_RECORDS_FILENAME,
+    load_sync_state,
+    save_raw_records,
+    save_sync_state,
+)
 from lib.config import REPO_ROOT, load_settings
 from lib.dictionaries import load_dictionaries, write_unmapped_log
+from lib.extras import EXTRAS_COLUMNS, normalize_extras
 from lib.models import SyncState
 from lib.normalize import normalize
 
@@ -48,6 +55,24 @@ def load_deals() -> pd.DataFrame:
     return deals
 
 
+@st.cache_data(ttl=900)
+def load_extras() -> pd.DataFrame:
+    """News-intelligence rows for the AI brief. Unlike load_deals, this never
+    raises -- a missing/failed sync degrades to an empty frame (matching
+    EXTRAS_COLUMNS) so the brief card can still render on the numbers alone.
+    """
+    settings = load_settings()
+    raw_path = settings.cache_dir / EXTRAS_RECORDS_FILENAME
+    if not raw_path.exists():
+        sync_extras_now()
+        if not raw_path.exists():
+            return pd.DataFrame(columns=EXTRAS_COLUMNS)
+
+    raw = pd.read_parquet(raw_path)
+    technology_dict = _dictionaries()["technology"]
+    return normalize_extras(raw, technology_dict)
+
+
 def get_sync_state() -> SyncState | None:
     settings = load_settings()
     return load_sync_state(settings.cache_dir)
@@ -74,3 +99,20 @@ def sync_now() -> SyncState:
     state = SyncState(last_sync_at=datetime.now(), row_count=len(records), status="ok")
     save_sync_state(state, settings.cache_dir)
     return state
+
+
+def sync_extras_now() -> None:
+    """Pull the Extras (news intelligence) table into its own cache file. Never
+    raises and has no separate SyncState -- a failure here should not make the
+    freshness banner (which is about the deals table) look broken; the AI brief
+    card simply runs with fewer or no news rows until the next successful sync.
+    """
+    settings = load_settings()
+    client = AirtableClient(pat=settings.airtable_pat, base_id=settings.airtable_base_id)
+
+    try:
+        records = client.fetch_all_records(settings.airtable_extras_table_id)
+    except Exception:
+        return
+
+    save_raw_records(records, settings.cache_dir, filename=EXTRAS_RECORDS_FILENAME)
