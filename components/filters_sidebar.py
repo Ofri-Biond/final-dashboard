@@ -10,20 +10,58 @@ The canonical groups are still what the charts aggregate by -- notably the
 Who-is-active deal-type split, which reads deal_type_groups directly.
 """
 
+import functools
+import logging
+from collections.abc import Callable
+
 import pandas as pd
 import streamlit as st
 
 from assets import theme
-from components.states import clear_filters
-from lib.data import dictionary_categories, get_sync_state, load_deals, load_extras, sync_extras_now, sync_now
+from components.states import clear_filters, safe_render
+from lib.data import (
+    clear_deals_cache,
+    dictionary_categories,
+    get_sync_state,
+    load_extras,
+    sync_extras_now,
+    sync_now,
+)
 from lib.filters import FilterState, apply_filters, sync_periods_to_years
 from lib.models import PHASE_ORDER
 
+logger = logging.getLogger(__name__)
 
+
+def _safe_options(build: Callable[..., list]) -> Callable[..., list]:
+    """A filter whose options can't be built (missing column, unsortable values)
+    is offered empty instead of failing the whole sidebar."""
+    @functools.wraps(build)
+    def wrapper(*args, **kwargs) -> list:
+        try:
+            return build(*args, **kwargs)
+        except Exception:
+            logger.exception("Could not build filter options in %s", build.__name__)
+            return []
+    return wrapper
+
+
+@_safe_options
+def _unique_options(df: pd.DataFrame, column: str) -> list:
+    return sorted(df[column].dropna().unique())
+
+
+@_safe_options
+def _year_options(df: pd.DataFrame) -> list[int]:
+    return sorted(int(y) for y in df["year"].dropna().unique())
+
+
+@_safe_options
 def _list_options(df: pd.DataFrame, column: str) -> list[str]:
     return sorted(df[column].explode().dropna().unique().tolist())
 
 
+@_safe_options
 def _category_options(df: pd.DataFrame, column: str, dictionary: str) -> list[str]:
     """Only real main categories from the dictionary YAML -- an unmapped raw value
     passes through normalize() under its own label, but it's a sub-category, not a
@@ -32,11 +70,13 @@ def _category_options(df: pd.DataFrame, column: str, dictionary: str) -> list[st
     return [value for value in _list_options(df, column) if value in categories]
 
 
+@_safe_options
 def _phase_options(df: pd.DataFrame) -> list[str]:
     present = set(df["phase"].dropna().unique())
     return [phase for phase in PHASE_ORDER if phase in present]
 
 
+@_safe_options
 def _period_options(df: pd.DataFrame, years: list[int]) -> list[str]:
     """Quarters ("2026-Q1") present in the data, newest first, limited to the selected
     years when any. Already-selected periods stay offered so narrowing the years
@@ -54,14 +94,14 @@ def _on_years_change(available_periods: list[str]) -> None:
 
 
 def render_sidebar(df: pd.DataFrame) -> FilterState:
-    year_options = sorted(int(y) for y in df["year"].dropna().unique())
+    year_options = _year_options(df)
 
     with st.sidebar:
         st.header(":material/filter_alt: Filters")
 
         years = st.multiselect(
             "Year", options=year_options, key="years", bind="query-params",
-            on_change=_on_years_change, args=(sorted(df["period"].dropna().unique()),),
+            on_change=_on_years_change, args=(_unique_options(df, "period"),),
         )
         periods = st.multiselect(
             "Quarter", options=_period_options(df, years), key="periods", bind="query-params",
@@ -88,16 +128,20 @@ def render_sidebar(df: pd.DataFrame) -> FilterState:
 
         # Phase/geography/indication options narrow to what's still reachable once
         # year + quarter + technology + deal type (category or sub-category) are picked (dependent options).
-        scoped = apply_filters(
-            df,
-            FilterState(
-                years=tuple(years), periods=tuple(periods),
-                technologies=tuple(technologies), technologies_raw=tuple(technologies_raw),
-                deal_types=tuple(deal_types), deal_types_raw=tuple(deal_types_raw),
-            ),
-        )
+        try:
+            scoped = apply_filters(
+                df,
+                FilterState(
+                    years=tuple(years), periods=tuple(periods),
+                    technologies=tuple(technologies), technologies_raw=tuple(technologies_raw),
+                    deal_types=tuple(deal_types), deal_types_raw=tuple(deal_types_raw),
+                ),
+            )
+        except Exception:
+            logger.exception("Could not narrow the dependent filter options")
+            scoped = df  # offer every option rather than none
         geographies = st.multiselect(
-            "Geography", options=sorted(scoped["based_at"].dropna().unique()),
+            "Geography", options=_unique_options(scoped, "based_at"),
             key="geographies", bind="query-params",
         )
         phases = st.multiselect(
@@ -135,7 +179,7 @@ def render_sidebar(df: pd.DataFrame) -> FilterState:
             help="Switch to a colorblind-safe palette for all charts.",
         )
         st.divider()
-        _render_freshness()
+        safe_render("Data freshness", _render_freshness)
 
     return filters
 
@@ -153,6 +197,6 @@ def _render_freshness() -> None:
         with st.spinner("Syncing..."):
             sync_now()
             sync_extras_now()
-        load_deals.clear()
+        clear_deals_cache()
         load_extras.clear()
         st.rerun()

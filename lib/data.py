@@ -14,9 +14,9 @@ from lib.cache import (
     save_sync_state,
 )
 from lib.config import REPO_ROOT, load_cache_dir, load_settings
-from lib.dictionaries import load_dictionaries, write_unmapped_log
+from lib.dictionaries import Dictionary, load_dictionaries, write_unmapped_log
 from lib.extras import EXTRAS_COLUMNS, normalize_extras
-from lib.models import SyncState
+from lib.models import DEAL_COLUMNS, SyncState
 from lib.normalize import normalize
 
 logger = logging.getLogger(__name__)
@@ -30,17 +30,60 @@ class DataError(Exception):
 
 
 @st.cache_resource
-def _dictionaries():
+def _load_dictionaries_cached() -> dict[str, Dictionary]:
     return load_dictionaries(DICTIONARIES_DIR)
 
 
+def _is_current(dicts: dict[str, Dictionary]) -> bool:
+    # cache_resource is keyed on the cached function's own source, so after a code
+    # change to Dictionary (e.g. a hot redeploy) it keeps serving instances of the
+    # *old* class. Those fail isinstance against the reloaded class.
+    return all(isinstance(d, Dictionary) and hasattr(d, "categories") for d in dicts.values())
+
+
+def _dictionaries() -> dict[str, Dictionary]:
+    dicts = _load_dictionaries_cached()
+    if not _is_current(dicts):
+        logger.warning("Cached dictionaries are stale (code changed); reloading them")
+        _load_dictionaries_cached.clear()
+        dicts = _load_dictionaries_cached()
+    return dicts
+
+
 def dictionary_categories(name: str) -> frozenset[str]:
-    """The main categories defined in config/dictionaries/<name>.yaml."""
-    return _dictionaries()[name].categories
+    """The main categories defined in config/dictionaries/<name>.yaml. Never
+    raises -- an unknown/broken dictionary yields no categories, so a filter
+    shows no options rather than taking the page down."""
+    try:
+        return _dictionaries()[name].categories
+    except Exception:
+        logger.exception("Could not read categories for dictionary %r", name)
+        return frozenset()
+
+
+def load_deals() -> pd.DataFrame:
+    """Cached deals, guarded against a stale cache entry. cache_data is keyed on
+    _load_deals_cached's source only, so after normalize()/DEAL_COLUMNS change a
+    frame from the old code can still be served; it is dropped and rebuilt once.
+    """
+    deals = _load_deals_cached()
+    missing = set(DEAL_COLUMNS) - set(deals.columns)
+    if missing:
+        logger.warning("Cached deals are missing columns %s; rebuilding", sorted(missing))
+        _load_deals_cached.clear()
+        deals = _load_deals_cached()
+        missing = set(DEAL_COLUMNS) - set(deals.columns)
+        if missing:
+            raise DataError(f"Deals data is missing expected columns: {', '.join(sorted(missing))}")
+    return deals
+
+
+def clear_deals_cache() -> None:
+    _load_deals_cached.clear()
 
 
 @st.cache_data(ttl=900)
-def load_deals() -> pd.DataFrame:
+def _load_deals_cached() -> pd.DataFrame:
     settings = load_settings()
     raw_path = settings.cache_dir / RAW_RECORDS_FILENAME
     if not raw_path.exists():
@@ -127,3 +170,10 @@ def sync_extras_now() -> None:
         save_raw_records(records, settings.cache_dir, filename=EXTRAS_RECORDS_FILENAME)
     except Exception:
         logger.exception("Extras sync failed")
+
+
+def reset_caches() -> None:
+    """Drop every Streamlit cache (data + resources) -- the recovery path when a
+    stale cache entry is the problem."""
+    st.cache_data.clear()
+    st.cache_resource.clear()
