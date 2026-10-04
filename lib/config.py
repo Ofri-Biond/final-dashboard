@@ -18,6 +18,14 @@ class Settings:
     cache_dir: Path
 
 
+class MissingSecretError(KeyError):
+    """A KeyError subclass (callers probing optional secrets catch KeyError) whose
+    message says what to do rather than just echoing the key."""
+
+    def __str__(self) -> str:
+        return f"Missing secret {self.args[0]} -- set it in the app's Streamlit secrets or .env"
+
+
 def _secret(name: str) -> str:
     """Streamlit Cloud has no .env (the repo is public, .env is gitignored) -- secrets
     there are set via the app's dashboard and only ever reach the process as
@@ -29,14 +37,26 @@ def _secret(name: str) -> str:
             return st.secrets[name]
     except Exception:
         pass
-    return os.environ[name]
+    try:
+        return os.environ[name]
+    except KeyError:
+        raise MissingSecretError(name) from None
+
+
+def _load_config() -> dict:
+    with open(REPO_ROOT / "config" / "settings.yaml") as f:
+        return yaml.safe_load(f)
+
+
+def load_cache_dir() -> Path:
+    """Where the local cache lives. Needs no secrets, so cache reads (sync state,
+    cached data) keep working when the Airtable credentials are missing."""
+    return REPO_ROOT / _load_config()["cache_dir"]
 
 
 def load_settings() -> Settings:
     load_dotenv(REPO_ROOT / ".env")
-
-    with open(REPO_ROOT / "config" / "settings.yaml") as f:
-        config = yaml.safe_load(f)
+    config = _load_config()
 
     return Settings(
         airtable_pat=_secret("AIRTABLE_PAT"),

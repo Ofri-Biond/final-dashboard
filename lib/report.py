@@ -5,6 +5,7 @@ that disagree with the screen it was downloaded from. Pure -- no `streamlit`.
 """
 
 import io
+import logging
 import tempfile
 from dataclasses import fields
 from datetime import datetime
@@ -69,6 +70,7 @@ DEAL_COLUMN_LABELS: dict[str, str] = {
     "deal_date": "Deal date",
     "year": "Year",
     "quarter": "Quarter",
+    "period": "Period",
     "source_url": "Source URL",
     "related_publications": "Related publications",
     "comment": "Comment",
@@ -222,6 +224,8 @@ _HEADING = ParagraphStyle(
     "BiondHeading", parent=_STYLES["Heading2"], textColor=colors.HexColor(TEAL), spaceBefore=10
 )
 _TABLE_HEADER_STYLE = ParagraphStyle("BiondTableHeader", parent=_BODY, textColor=colors.white)
+logger = logging.getLogger(__name__)
+
 _PAGE_WIDTH, _ = letter
 _CONTENT_WIDTH = _PAGE_WIDTH - 1.5 * inch
 _CHART_EXPORT_SIZE = (1000, 550)  # px, kaleido export -- fixed aspect for every panel
@@ -239,18 +243,28 @@ def _batch_chart_images(panels: list[ChartPanel]) -> dict[str, bytes]:
     browser session instead (~2.5s total regardless of panel count). It only
     writes to real file paths (a BytesIO target silently receives nothing), so
     a scratch temp dir is used and immediately cleaned up.
+
+    Returns {} when the export fails (kaleido needs a Chrome binary, which a
+    hosted environment may lack) -- the PDF then ships its text without charts
+    rather than failing outright.
     """
     if not panels:
         return {}
     width, height = _CHART_EXPORT_SIZE
-    with tempfile.TemporaryDirectory() as tmp:
-        paths = [Path(tmp) / f"{panel.key}.png" for panel in panels]
-        pio.write_images(
-            [panel.figure for panel in panels],
-            [str(p) for p in paths],
-            format="png", width=width, height=height, scale=2,
-        )
-        return {panel.key: path.read_bytes() for panel, path in zip(panels, paths, strict=True)}
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            paths = [Path(tmp) / f"{panel.key}.png" for panel in panels]
+            pio.write_images(
+                [panel.figure for panel in panels],
+                [str(p) for p in paths],
+                format="png", width=width, height=height, scale=2,
+            )
+            return {
+                panel.key: path.read_bytes() for panel, path in zip(panels, paths, strict=True)
+            }
+    except Exception:
+        logger.exception("Chart image export failed; building the PDF without charts")
+        return {}
 
 
 def _chart_image(png_bytes: bytes) -> RLImage:
@@ -316,10 +330,13 @@ def build_pdf_report(
     story.append(Spacer(1, 0.1 * inch))
 
     images = _batch_chart_images(panels)
+    if panels and not images:
+        story.append(_p("Charts could not be rendered in this export.", _ITALIC))
     for panel in panels:
         story.append(Paragraph(escape(panel.title), _HEADING))
         story.append(_p(panel.finding))
-        story.append(_chart_image(images[panel.key]))
+        if panel.key in images:
+            story.append(_chart_image(images[panel.key]))
         if panel.coverage is not None:
             story.append(_p(panel.coverage.note(), _ITALIC))
         story.append(Spacer(1, 0.1 * inch))

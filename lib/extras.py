@@ -14,7 +14,7 @@ import pandas as pd
 
 from lib.aggregate import explode
 from lib.dictionaries import Dictionary
-from lib.filters import FilterState
+from lib.filters import FilterState, selected_years
 
 # Raw Airtable column names for the Extras table, kept next to their use so a
 # rename is a one-line diff (same convention as lib/normalize.py).
@@ -155,7 +155,8 @@ def get_extras_context(
     }
     company_scope = (originators | collaborators) - EXTRAS_COMPANY_STOPLIST
 
-    year_range = (min(filters.years), max(filters.years)) if filters.years else None
+    years = selected_years(filters)
+    year_range = (years[0], years[-1]) if years else None
 
     matched = []
     for row in extras.to_dict("records"):

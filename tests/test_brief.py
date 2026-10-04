@@ -179,3 +179,17 @@ def test_llm_payload_date_is_json_serializable(monkeypatch):
 
     assert received["llm_rows"][0]["date"] == "2026-08-01"
     json.dumps({"fact_pack": _fact_pack(), "news": received["llm_rows"]})  # must not raise
+
+
+def test_unexpected_model_error_becomes_brief_unavailable(monkeypatch):
+    def _boom(fact_pack, llm_rows):
+        raise TypeError("SDK rejected a parameter")
+
+    monkeypatch.setattr(brief_module, "_call_model", _boom)
+    with pytest.raises(BriefUnavailable):
+        generate_brief(_fact_pack(), _extras())
+
+
+def test_malformed_cache_entry_is_a_cache_miss(_isolated_cache):
+    _isolated_cache.write_text(json.dumps({"k": {"bullets": ["x"]}}))  # missing fields
+    assert load_cached_brief("k") is None

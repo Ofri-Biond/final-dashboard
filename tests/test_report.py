@@ -40,6 +40,7 @@ def _deal_row(i: int, **overrides) -> dict:
         "deal_date": pd.Timestamp("2020-01-01") + pd.Timedelta(days=i),
         "year": 2020 + i % 5,
         "quarter": 1 + i % 4,
+        "period": f"{2020 + i % 5}-Q{1 + i % 4}",
         "source_url": None,
         "related_publications": None,
         "comment": None,
@@ -226,3 +227,16 @@ def test_5000_rows_builds_under_15_seconds():
     assert len(excel_bytes) > 0
     assert pdf_bytes.startswith(b"%PDF")
     assert elapsed < 15
+
+
+def test_pdf_still_builds_when_chart_export_fails(monkeypatch):
+    def no_chrome(*args, **kwargs):
+        raise RuntimeError("Kaleido requires Chrome")
+
+    monkeypatch.setattr("lib.report.pio.write_images", no_chrome)
+    df = _deals_frame(15)
+    fact_pack, _agg_tables, panels = _build_context(df)
+    data = build_pdf_report(
+        df, fact_pack, _brief(), panels, _extras(), FilterState(), None, datetime(2026, 1, 1),
+    )
+    assert data.startswith(b"%PDF")

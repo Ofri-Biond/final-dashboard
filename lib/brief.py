@@ -106,14 +106,17 @@ def _load_cache() -> dict:
 
 def _save_cache(cache: dict) -> None:
     path = _cache_path()
-    path.parent.mkdir(parents=True, exist_ok=True)
     # Trim to the most recently generated entries so the file can't grow forever.
     trimmed = dict(
         sorted(cache.items(), key=lambda item: item[1]["generated_at"], reverse=True)[
             :MAX_CACHE_ENTRIES
         ]
     )
-    path.write_text(json.dumps(trimmed, indent=2))
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(trimmed, indent=2))
+    except OSError:
+        logger.exception("Could not write the brief cache; the brief just won't be remembered")
 
 
 def _brief_to_payload(brief: Brief) -> dict:
@@ -143,7 +146,13 @@ def _payload_to_brief(payload: dict) -> Brief:
 def load_cached_brief(key: str) -> Brief | None:
     cache = _load_cache()
     payload = cache.get(key)
-    return _payload_to_brief(payload) if payload else None
+    if not payload:
+        return None
+    try:
+        return _payload_to_brief(payload)
+    except (KeyError, TypeError, ValueError):
+        logger.warning("Ignoring malformed brief cache entry")
+        return None
 
 
 def cached_brief_for(fact_pack: dict, extras: list[dict]) -> Brief | None:
@@ -304,6 +313,9 @@ def generate_brief(fact_pack: dict, extras: list[dict]) -> Brief:
         raise BriefUnavailable(f"Anthropic API error: {exc}") from exc
     except (json.JSONDecodeError, StopIteration, KeyError) as exc:
         raise BriefUnavailable("malformed response from the model") from exc
+    except Exception as exc:  # anything unforeseen (SDK/shape changes) must not break the page
+        logger.exception("Unexpected error generating the brief")
+        raise BriefUnavailable("unexpected error generating the brief") from exc
 
     if not isinstance(raw, dict) or "bullets" not in raw or "insights" not in raw:
         raise BriefUnavailable("malformed response shape from the model")

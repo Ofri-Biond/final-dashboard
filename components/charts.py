@@ -25,11 +25,19 @@ def _label(value: object) -> str:
     return str(value)
 
 
+def _year_axis(fig: go.Figure) -> None:
+    """Years as discrete categories, ascending: only years with data get a slot, so
+    a selection like 2010 + 2026 shows two adjacent bars -- not a continuous axis
+    with "2,023.5" ticks implying data between them."""
+    fig.update_xaxes(type="category", categoryorder="category ascending")
+
+
 def trend_bars_and_value(
     counts: Aggregate, values: Aggregate, count_label: str, value_label: str
 ) -> go.Figure:
-    """Deal count (bars) and disclosed value (spline+fill line) over the same year
-    axis, stacked in two rows rather than sharing one axis (no dual axes).
+    """Deal count and disclosed value as bars over the same year axis, stacked in
+    two rows rather than sharing one axis (no dual axes). Bars, not a line: the
+    selected years needn't be contiguous, so nothing connects one to the next.
     """
     count_col = group_column(counts)
     value_col = group_column(values)
@@ -42,20 +50,19 @@ def trend_bars_and_value(
         row=1, col=1,
     )
     fig.add_trace(
-        go.Scatter(
+        go.Bar(
             x=values.frame[value_col].map(_label), y=values.frame["value"], name=value_label,
-            mode="lines", fill="tozeroy",
         ),
         row=2, col=1,
     )
     fig.update_yaxes(title_text=count_label, row=1, col=1)
     fig.update_yaxes(title_text=value_label, row=2, col=1)
-    fig.update_xaxes(rangeslider=dict(visible=True, thickness=0.08), row=2, col=1)
+    _year_axis(fig)
     fig.update_layout(showlegend=False)
     return fig
 
 
-def stacked_share(agg: Aggregate, x: str, color: str) -> go.Figure:
+def stacked_share(agg: Aggregate, x: str, color: str, x_title: str = "Year") -> go.Figure:
     """100%-stacked bars: `agg` is a share() result (values already percentages),
     grouped by `color` within `x`.
     """
@@ -63,7 +70,8 @@ def stacked_share(agg: Aggregate, x: str, color: str) -> go.Figure:
     for category in agg.frame[color].unique():
         subset = agg.frame[agg.frame[color] == category].sort_values(x)
         fig.add_trace(go.Bar(x=subset[x].map(_label), y=subset["value"], name=str(category)))
-    fig.update_layout(barmode="stack", xaxis_title="Year", yaxis_title="% of deals")
+    fig.update_layout(barmode="stack", xaxis_title=x_title, yaxis_title="% of deals")
+    _year_axis(fig)
     return fig
 
 

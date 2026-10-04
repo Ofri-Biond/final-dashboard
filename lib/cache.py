@@ -35,10 +35,13 @@ def load_sync_state(cache_dir: Path) -> SyncState | None:
     if not path.exists():
         return None
 
-    payload = json.loads(path.read_text())
-    return SyncState(
-        last_sync_at=datetime.fromisoformat(payload["last_sync_at"]),
-        row_count=payload["row_count"],
-        status=payload["status"],
-        error_message=payload["error_message"],
-    )
+    try:
+        payload = json.loads(path.read_text())
+        return SyncState(
+            last_sync_at=datetime.fromisoformat(payload["last_sync_at"]),
+            row_count=payload["row_count"],
+            status=payload["status"],
+            error_message=payload["error_message"],
+        )
+    except (OSError, ValueError, KeyError, TypeError):
+        return None  # unreadable/corrupt state file: treat as "no sync recorded yet"

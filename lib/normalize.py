@@ -2,7 +2,12 @@ import numpy as np
 import pandas as pd
 
 from lib.dictionaries import Dictionary
-from lib.models import DEAL_TYPE_GROUP_PRIORITY, MEGA_DEAL_THRESHOLD_MUSD, PHASE_ORDER
+from lib.models import (
+    DEAL_COLUMNS,
+    DEAL_TYPE_GROUP_PRIORITY,
+    MEGA_DEAL_THRESHOLD_MUSD,
+    PHASE_ORDER,
+)
 
 # Raw Airtable column names, kept next to their use so a rename is a one-line diff.
 _COL_ORIGINATOR = "Originator"
@@ -32,7 +37,7 @@ _COL_AUTO_LOADED = "Auto-loaded"
 # NOTE: the table's "Year" (single select) and "Date years" (number) columns are
 # never read. Both are separately-maintained fields that can drift from "Date";
 # `year` is always derived from `deal_date` so there is exactly one source of truth.
-# `quarter` (1-4) is likewise always derived from `deal_date`.
+# `quarter` (1-4) and `period` ("2026-Q1") are likewise always derived from `deal_date`.
 
 
 def _text(row: pd.Series, col: str) -> str | None:
@@ -103,6 +108,7 @@ def _normalize_row(row: pd.Series, dicts: dict[str, Dictionary]) -> dict:
     deal_date = pd.to_datetime(row.get(_COL_DATE), errors="coerce")
     year = int(deal_date.year) if pd.notna(deal_date) else None
     quarter = int((deal_date.month - 1) // 3 + 1) if pd.notna(deal_date) else None
+    period = f"{year}-Q{quarter}" if year is not None else None
 
     upfront_musd = _number(row, _COL_UPFRONT)
     total_musd = _number(row, _COL_TOTAL)
@@ -137,6 +143,7 @@ def _normalize_row(row: pd.Series, dicts: dict[str, Dictionary]) -> dict:
         "deal_date": deal_date.date() if pd.notna(deal_date) else None,
         "year": year,
         "quarter": quarter,
+        "period": period,
         "source_url": _text(row, _COL_SOURCE_URL),
         "related_publications": _text(row, _COL_RELATED_PUBLICATIONS),
         "comment": _text(row, _COL_COMMENT),
@@ -152,4 +159,4 @@ def _normalize_row(row: pd.Series, dicts: dict[str, Dictionary]) -> dict:
 def normalize(raw: pd.DataFrame, dicts: dict[str, Dictionary]) -> pd.DataFrame:
     """Turn the raw Airtable frame into one row per Deal field (see lib.models.Deal)."""
     rows = [_normalize_row(row, dicts) for _, row in raw.iterrows()]
-    return pd.DataFrame(rows)
+    return pd.DataFrame(rows, columns=DEAL_COLUMNS)  # explicit: an empty table keeps its columns

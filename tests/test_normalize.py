@@ -91,3 +91,15 @@ def test_missing_based_at_becomes_unknown(dicts):
     row = make_raw_row(**{"Based at:": None})
     df = normalize(raw_frame(row), dicts)
     assert df.iloc[0]["based_at"] == "Unknown"
+
+
+def test_period_is_derived_from_the_deal_date(dicts):
+    df = normalize(raw_frame(make_raw_row(Date="2026-02-15")), dicts)
+    assert df.iloc[0]["period"] == "2026-Q1"
+    assert normalize(raw_frame({"record_id": "rec1"}), dicts).iloc[0]["period"] is None
+
+
+def test_empty_table_keeps_its_columns(dicts):
+    df = normalize(raw_frame(), dicts)
+    assert df.empty
+    assert {"year", "period", "record_id"} <= set(df.columns)

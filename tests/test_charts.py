@@ -40,11 +40,20 @@ def test_trend_bars_and_value_uses_two_stacked_axes_not_a_dual_axis():
         assert getattr(fig.layout[key], "overlaying", None) is None
 
 
-def test_trend_bars_and_value_puts_bars_above_the_value_line():
+def test_trend_bars_and_value_draws_both_rows_as_bars():
     counts = _agg(pd.DataFrame({"year": [2023], "value": [10]}))
     values = _agg(pd.DataFrame({"year": [2023], "value": [100.0]}))
     fig = charts.trend_bars_and_value(counts, values, "Deals", "Value ($M)")
-    assert [trace.type for trace in fig.data] == ["bar", "scatter"]
+    assert [trace.type for trace in fig.data] == ["bar", "bar"]
+
+
+def test_trend_year_axis_is_categorical_so_gaps_between_years_collapse():
+    counts = _agg(pd.DataFrame({"year": [2010.0, 2026.0], "value": [3, 5]}))
+    values = _agg(pd.DataFrame({"year": [2026.0], "value": [100.0]}))
+    fig = charts.trend_bars_and_value(counts, values, "Deals", "Value ($M)")
+    assert fig.layout.xaxis.type == "category"
+    assert fig.layout.xaxis2.type == "category"
+    assert list(fig.data[0].x) == ["2010", "2026"]
 
 
 def test_ranked_bars_orders_largest_value_on_top():
@@ -95,3 +104,19 @@ def test_activity_grid_handles_an_empty_segment_without_raising():
     frame = pd.DataFrame({"collaborators": [], "year": [], "value": []})
     fig = charts.activity_grid(_agg(frame), index="collaborators", columns="year")
     assert list(fig.data[0].x) == []
+
+
+def test_trend_panels_bucket_by_quarter_when_quarters_are_filtered():
+    from lib.filters import FilterState
+    from lib.report_data import build_trending_panels
+
+    df = pd.DataFrame({
+        "year": [2025, 2026], "period": ["2025-Q3", "2026-Q1"], "total_musd": [10.0, 20.0],
+        "is_mega_deal": [False, False], "deal_type_groups": [["License"], ["M&A"]],
+    })
+    trend, mix = build_trending_panels(df, FilterState(periods=("2025-Q3", "2026-Q1")))
+    assert list(trend.figure.data[0].x) == ["2025-Q3", "2026-Q1"]
+    assert trend.title.endswith("by quarter") and mix.title.endswith("by quarter")
+
+    trend, _ = build_trending_panels(df, FilterState(years=(2025, 2026)))
+    assert list(trend.figure.data[0].x) == ["2025", "2026"]

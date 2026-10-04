@@ -1,4 +1,4 @@
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field, replace
 
 import pandas as pd
@@ -11,11 +11,13 @@ import pandas as pd
 # A "_raw" field filters the dictionary-unmapped value (e.g. "Option to license")
 # independently of its mapped group (e.g. "License") -- both may be set at once and
 # combine with AND, like any other pair of filters.
-# years/quarters allow null passthrough: undated rows (year/quarter is None) always
-# pass those filters -- they are never silently dropped by narrowing a selection.
+# years/periods allow null passthrough: undated rows (year/period is None) always
+# pass those filters. A period is a specific quarter of a specific year ("2026-Q1"),
+# so periods from different years mix freely -- unlike independent year + quarter lists.
+# Undated rows are never silently dropped by narrowing a selection.
 _FILTER_COLUMNS = [
     ("years", "year", False, True, int),
-    ("quarters", "quarter", False, True, int),
+    ("periods", "period", False, True, str),
     ("indications", "indications", True, False, str),
     ("indications_raw", "indications_raw", True, False, str),
     ("technologies", "technologies", True, False, str),
@@ -31,7 +33,7 @@ _MULTISELECT_FIELDS = [state_field for state_field, *_ in _FILTER_COLUMNS]
 # _FILTER_COLUMNS since it enumerates the same fields.
 _FIELD_LABELS: dict[str, str] = {
     "years": "Year",
-    "quarters": "Quarter",
+    "periods": "Quarter",
     "indications": "Indication",
     "indications_raw": "Indication (raw)",
     "technologies": "Technology",
@@ -46,7 +48,7 @@ _FIELD_LABELS: dict[str, str] = {
 @dataclass(frozen=True)
 class FilterState:
     years: tuple[int, ...] = field(default_factory=tuple)
-    quarters: tuple[int, ...] = field(default_factory=tuple)
+    periods: tuple[str, ...] = field(default_factory=tuple)
     indications: tuple[str, ...] = field(default_factory=tuple)
     indications_raw: tuple[str, ...] = field(default_factory=tuple)
     technologies: tuple[str, ...] = field(default_factory=tuple)
@@ -126,11 +128,55 @@ def apply_filters(df: pd.DataFrame, filters: FilterState) -> pd.DataFrame:
     return df[mask]
 
 
-def previous_period(filters: FilterState, data_years: tuple[int, int]) -> FilterState | None:
-    """A same-length year window immediately preceding filters.years, for KPI deltas.
-    Falls back to the data's own range when no year filter is set. None when the
-    data doesn't extend far enough back to fill even a partial prior window.
+def data_year_range(df: pd.DataFrame) -> tuple[int, int]:
+    """(first, last) year present in the data; (0, 0) when no deal has a date, which
+    previous_period reads as "no earlier period exists"."""
+    years = df["year"].dropna()
+    return (int(years.min()), int(years.max())) if not years.empty else (0, 0)
+
+
+def selected_years(filters: FilterState) -> tuple[int, ...]:
+    """The years the selection covers: filters.years, else the years of filters.periods.
+    Empty when no time filter is set."""
+    if filters.years:
+        return tuple(sorted(filters.years))
+    return tuple(sorted({int(p[:4]) for p in filters.periods}))
+
+
+def sync_periods_to_years(
+    years: Iterable[int], periods: Iterable[str], available_periods: Iterable[str]
+) -> tuple[str, ...]:
+    """The Quarter selection after the Year selection changes: quarters of removed
+    years are dropped, and a newly selected year (one with no quarter picked) gets
+    all of its quarters, so adding a year never silently contributes nothing. An
+    empty Quarter selection already means "every quarter" and is left alone.
     """
+    years, periods = set(years), tuple(periods)
+    if not years or not periods:
+        return periods
+    kept = [p for p in periods if int(p[:4]) in years]
+    covered = {int(p[:4]) for p in kept}
+    added = [p for p in available_periods if int(p[:4]) in years - covered]
+    return tuple(sorted(set(kept) | set(added), reverse=True))
+
+
+def _same_quarter_last_year(period: str) -> str:
+    return f"{int(period[:4]) - 1}{period[4:]}"
+
+
+def previous_period(filters: FilterState, data_years: tuple[int, int]) -> FilterState | None:
+    """The period immediately preceding the selection, for KPI deltas. With specific
+    quarters selected it is the same quarters one year earlier (2026-Q1 -> 2025-Q1);
+    otherwise a same-length year window before filters.years (the data's own range
+    when no year filter is set). None when the data doesn't reach back far enough.
+    """
+    if filters.periods:
+        shifted = tuple(
+            _same_quarter_last_year(p) for p in filters.periods
+            if int(p[:4]) - 1 >= data_years[0]
+        )
+        return replace(filters, years=(), periods=shifted) if shifted else None
+
     start, end = (min(filters.years), max(filters.years)) if filters.years else data_years
     length = end - start + 1
     prev_end = start - 1

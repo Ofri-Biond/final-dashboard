@@ -24,7 +24,14 @@ from datetime import timedelta
 import pandas as pd
 
 from lib.aggregate import aggregate, explode, summarize, top_n
-from lib.filters import FilterState, apply_filters, describe, previous_period
+from lib.filters import (
+    FilterState,
+    apply_filters,
+    data_year_range,
+    describe,
+    previous_period,
+    selected_years,
+)
 from lib.models import PHASE_ORDER
 
 FACT_PACK_VERSION = 1
@@ -130,11 +137,8 @@ def _kpis(
             ),
         }
 
-    prev_years = (
-        [min(prev_filters.years), max(prev_filters.years)]
-        if prev_filters.years
-        else list(data_year_range)
-    )
+    prev_selected = selected_years(prev_filters)
+    prev_years = [prev_selected[0], prev_selected[-1]] if prev_selected else list(data_year_range)
     prev_df = apply_filters(df_all, prev_filters)
     return {
         "current": current,
@@ -153,12 +157,12 @@ def _date_windows(df_all: pd.DataFrame, filters: FilterState):
     """Two trailing-12-month windows (current, prior) anchored on the latest
     deal_date across the WHOLE dataset (not the filtered view, so the anchor
     doesn't move when a year filter narrows the view), each further scoped by
-    every active filter except years/quarters. Also returns `historical` --
+    every active filter except years/periods. Also returns `historical` --
     everything dated before the current window, under the same non-year scope
     -- which quiet-exit detection needs (a wider "has this ever happened"
     baseline, not just the one prior 12-month window).
     """
-    non_year = replace(filters, years=(), quarters=())
+    non_year = replace(filters, years=(), periods=())
     scoped = apply_filters(df_all, non_year)
     dated = scoped.dropna(subset=["deal_date"]).copy()
     dated["deal_date"] = pd.to_datetime(dated["deal_date"])
@@ -567,7 +571,7 @@ def build_fact_pack(
     Every number the AI Market Brief may cite lives here -- lib.brief validates
     every figure in the model's output against exactly this structure.
     """
-    data_year_range = (int(df_all["year"].min()), int(df_all["year"].max()))
+    year_range = data_year_range(df_all)
 
     windows_result = _date_windows(df_all, filters)
     if windows_result is None:
@@ -592,9 +596,9 @@ def build_fact_pack(
             "filters": describe(filters),
             "exclude_mega_deals": filters.exclude_mega_deals,
             "mega_deal_threshold_musd": 10_000,
-            "data_year_range": list(data_year_range),
+            "data_year_range": list(year_range),
         },
-        "kpis": _kpis(df_filtered, df_all, filters, data_year_range),
+        "kpis": _kpis(df_filtered, df_all, filters, year_range),
         "periods": periods,
         "snapshot": snapshot,
         "trends": trends,

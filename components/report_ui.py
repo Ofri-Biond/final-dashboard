@@ -15,6 +15,7 @@ of the current view; a filter change invalidates the cache and the trigger
 reappears.
 """
 
+import logging
 from collections.abc import Callable
 from datetime import datetime
 
@@ -28,6 +29,8 @@ from lib.facts import build_fact_pack
 from lib.filters import FilterState, describe
 from lib.report import build_excel_report, build_pdf_report
 from lib.report_data import build_aggregate_tables, build_chart_panels
+
+logger = logging.getLogger(__name__)
 
 
 def _fingerprint(df: pd.DataFrame, filters: FilterState) -> tuple:
@@ -59,9 +62,14 @@ def _render_format_button(
         return
 
     if st.button(f"Generate {label}", key=f"report_{state_prefix}_generate"):
-        with st.spinner("Preparing report..."):
-            generated_at = datetime.now()
-            data = build_fn(generated_at)
+        generated_at = datetime.now()
+        try:
+            with st.spinner("Preparing report..."):
+                data = build_fn(generated_at)
+        except Exception:
+            logger.exception("Report build failed (%s)", state_prefix)
+            st.error(f"Couldn't build the {label} report -- please try again.")
+            return
         st.session_state[bytes_key] = data
         st.session_state[fp_key] = fingerprint
         st.session_state[date_key] = generated_at

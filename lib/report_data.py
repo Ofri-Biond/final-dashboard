@@ -35,15 +35,22 @@ class ChartPanel:
     export_filename: str
 
 
+def _time_grain(filters: FilterState) -> tuple[str, str]:
+    """(column, label) the trend charts bucket by: per chosen quarter when quarters
+    are filtered, otherwise per year."""
+    return ("period", "Quarter") if filters.periods else ("year", "Year")
+
+
 def _trend_panel(df: pd.DataFrame, filters: FilterState) -> ChartPanel:
-    counts = aggregate(df, by="year", measure="count")
+    column, label = _time_grain(filters)
+    counts = aggregate(df, by=column, measure="count")
     values = aggregate(
-        df, by="year", measure="sum", value_col="total_musd",
+        df, by=column, measure="sum", value_col="total_musd",
         exclude_mega=filters.exclude_mega_deals,
     )
     return ChartPanel(
         key="trend",
-        title="Deal volume & value by year",
+        title=f"Deal volume & value by {label.lower()}",
         finding=trend_finding(counts, "Deal count"),
         figure=charts.trend_bars_and_value(counts, values, "Deals", "Disclosed value ($M)"),
         coverage=values.coverage,
@@ -53,13 +60,14 @@ def _trend_panel(df: pd.DataFrame, filters: FilterState) -> ChartPanel:
 
 
 def _mix_panel(df: pd.DataFrame, filters: FilterState) -> ChartPanel:
-    by_type_year = aggregate(df, by="deal_type_groups", measure="count", year_col="year")
-    mix = share(by_type_year, within="year")
+    column, label = _time_grain(filters)
+    by_type = aggregate(df, by="deal_type_groups", measure="count", year_col=column)
+    mix = share(by_type, within=column)
     return ChartPanel(
         key="mix",
-        title="Deal-type mix by year",
-        finding=mix_finding(mix, within="year"),
-        figure=charts.stacked_share(mix, x="year", color="deal_type_groups"),
+        title=f"Deal-type mix by {label.lower()}",
+        finding=mix_finding(mix, within=column),
+        figure=charts.stacked_share(mix, x=column, color="deal_type_groups", x_title=label),
         coverage=None,
         export_sheets={"Deal type mix": mix.frame},
         export_filename="deal_type_mix",

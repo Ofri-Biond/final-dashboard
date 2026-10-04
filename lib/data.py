@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime
 from pathlib import Path
 
@@ -12,11 +13,13 @@ from lib.cache import (
     save_raw_records,
     save_sync_state,
 )
-from lib.config import REPO_ROOT, load_settings
+from lib.config import REPO_ROOT, load_cache_dir, load_settings
 from lib.dictionaries import load_dictionaries, write_unmapped_log
 from lib.extras import EXTRAS_COLUMNS, normalize_extras
 from lib.models import SyncState
 from lib.normalize import normalize
+
+logger = logging.getLogger(__name__)
 
 DICTIONARIES_DIR = REPO_ROOT / "config" / "dictionaries"
 UNMAPPED_LOG_FILENAME = "unmapped_values.csv"
@@ -68,36 +71,41 @@ def load_extras() -> pd.DataFrame:
         if not raw_path.exists():
             return pd.DataFrame(columns=EXTRAS_COLUMNS)
 
-    raw = pd.read_parquet(raw_path)
-    technology_dict = _dictionaries()["technology"]
-    return normalize_extras(raw, technology_dict)
+    try:
+        raw = pd.read_parquet(raw_path)
+        return normalize_extras(raw, _dictionaries()["technology"])
+    except Exception:
+        logger.exception("Could not load news extras; continuing without them")
+        return pd.DataFrame(columns=EXTRAS_COLUMNS)
 
 
 def get_sync_state() -> SyncState | None:
-    settings = load_settings()
-    return load_sync_state(settings.cache_dir)
+    return load_sync_state(load_cache_dir())
 
 
 def sync_now() -> SyncState:
-    """Pull the Airtable table into the local cache. Never raises -- a failure is
-    recorded as status="failed" and the last good cache stays in place, so the UI
-    can keep serving stale data with a banner rather than crash (PRD "Airtable down").
+    """Pull the Airtable table into the local cache. Never raises -- a failure
+    (including missing credentials) is recorded as status="failed" and the last
+    good cache stays in place, so the UI can keep serving stale data with a banner
+    rather than crash (PRD "Airtable down").
     """
-    settings = load_settings()
-    client = AirtableClient(pat=settings.airtable_pat, base_id=settings.airtable_base_id)
-
+    cache_dir = load_cache_dir()
     try:
+        settings = load_settings()
+        client = AirtableClient(pat=settings.airtable_pat, base_id=settings.airtable_base_id)
         records = client.fetch_all_records(settings.airtable_table_id)
+        save_raw_records(records, cache_dir)
+        state = SyncState(last_sync_at=datetime.now(), row_count=len(records), status="ok")
     except Exception as exc:
+        logger.exception("Airtable sync failed")
         state = SyncState(
             last_sync_at=datetime.now(), row_count=0, status="failed", error_message=str(exc)
         )
-        save_sync_state(state, settings.cache_dir)
-        return state
 
-    save_raw_records(records, settings.cache_dir)
-    state = SyncState(last_sync_at=datetime.now(), row_count=len(records), status="ok")
-    save_sync_state(state, settings.cache_dir)
+    try:
+        save_sync_state(state, cache_dir)
+    except OSError:
+        logger.exception("Could not write the sync state file")
     return state
 
 
@@ -107,12 +115,10 @@ def sync_extras_now() -> None:
     freshness banner (which is about the deals table) look broken; the AI brief
     card simply runs with fewer or no news rows until the next successful sync.
     """
-    settings = load_settings()
-    client = AirtableClient(pat=settings.airtable_pat, base_id=settings.airtable_base_id)
-
     try:
+        settings = load_settings()
+        client = AirtableClient(pat=settings.airtable_pat, base_id=settings.airtable_base_id)
         records = client.fetch_all_records(settings.airtable_extras_table_id)
+        save_raw_records(records, settings.cache_dir, filename=EXTRAS_RECORDS_FILENAME)
     except Exception:
-        return
-
-    save_raw_records(records, settings.cache_dir, filename=EXTRAS_RECORDS_FILENAME)
+        logger.exception("Extras sync failed")

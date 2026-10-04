@@ -16,7 +16,7 @@ import streamlit as st
 from assets import theme
 from components.states import clear_filters
 from lib.data import get_sync_state, load_deals, load_extras, sync_extras_now, sync_now
-from lib.filters import FilterState, apply_filters
+from lib.filters import FilterState, apply_filters, sync_periods_to_years
 from lib.models import PHASE_ORDER
 
 
@@ -29,6 +29,22 @@ def _phase_options(df: pd.DataFrame) -> list[str]:
     return [phase for phase in PHASE_ORDER if phase in present]
 
 
+def _period_options(df: pd.DataFrame, years: list[int]) -> list[str]:
+    """Quarters ("2026-Q1") present in the data, newest first, limited to the selected
+    years when any. Already-selected periods stay offered so narrowing the years
+    never invalidates a live selection."""
+    in_scope = df if not years else df[df["year"].isin(years)]
+    options = set(in_scope["period"].dropna().unique())
+    options.update(st.session_state.get("periods", []))
+    return sorted(options, reverse=True)
+
+
+def _on_years_change(available_periods: list[str]) -> None:
+    st.session_state["periods"] = list(sync_periods_to_years(
+        st.session_state.get("years", []), st.session_state.get("periods", []), available_periods,
+    ))
+
+
 def render_sidebar(df: pd.DataFrame) -> FilterState:
     year_options = sorted(int(y) for y in df["year"].dropna().unique())
 
@@ -37,10 +53,11 @@ def render_sidebar(df: pd.DataFrame) -> FilterState:
 
         years = st.multiselect(
             "Year", options=year_options, key="years", bind="query-params",
+            on_change=_on_years_change, args=(sorted(df["period"].dropna().unique()),),
         )
-        quarters = st.multiselect(
-            "Quarter", options=[1, 2, 3, 4], format_func=lambda q: f"Q{q}",
-            key="quarters", bind="query-params",
+        periods = st.multiselect(
+            "Quarter", options=_period_options(df, years), key="periods", bind="query-params",
+            help="Pick specific quarters of specific years -- e.g. 2026-Q1 and 2025-Q3.",
         )
         technologies_raw = st.multiselect(
             "Technology", options=_list_options(df, "technologies_raw"),
@@ -56,7 +73,7 @@ def render_sidebar(df: pd.DataFrame) -> FilterState:
         scoped = apply_filters(
             df,
             FilterState(
-                years=tuple(years), quarters=tuple(quarters),
+                years=tuple(years), periods=tuple(periods),
                 technologies_raw=tuple(technologies_raw), deal_types_raw=tuple(deal_types_raw),
             ),
         )
@@ -78,7 +95,7 @@ def render_sidebar(df: pd.DataFrame) -> FilterState:
 
         filters = FilterState(
             years=tuple(years),
-            quarters=tuple(quarters),
+            periods=tuple(periods),
             technologies_raw=tuple(technologies_raw),
             deal_types_raw=tuple(deal_types_raw),
             geographies=tuple(geographies),

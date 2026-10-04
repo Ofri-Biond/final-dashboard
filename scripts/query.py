@@ -7,7 +7,7 @@ Examples:
   python scripts/query.py --technologies "Antibody Drug Conjugate"
   python scripts/query.py --technologies-raw "Antibody Drug Conjugate,ADCs"
   python scripts/query.py --deal-types License --years 2023,2024,2025
-  python scripts/query.py --years 2022,2023 --quarters 3,4
+  python scripts/query.py --periods 2026-Q1,2025-Q3
   python scripts/query.py --geographies China --phases "Phase 2,Phase 3"
   python scripts/query.py --technologies "CAR therapy" --money --limit 10
   python scripts/query.py --exclude-mega-deals --money --all
@@ -42,7 +42,7 @@ def main() -> int:
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
     parser.add_argument("--years", help='comma-separated, e.g. "2023,2024,2025"')
-    parser.add_argument("--quarters", help='comma-separated (1-4), e.g. "3,4"')
+    parser.add_argument("--periods", help='comma-separated year-quarters, e.g. "2026-Q1,2025-Q3"')
     parser.add_argument("--indications", help="comma-separated mapped groups, e.g. Oncology,INI")
     parser.add_argument("--indications-raw", help="comma-separated raw values, e.g. Immunology")
     parser.add_argument("--technologies", help='comma-separated mapped groups, e.g. "CAR therapy"')
@@ -72,7 +72,7 @@ def main() -> int:
         key: value
         for key, value in {
             "years": args.years,
-            "quarters": args.quarters,
+            "periods": args.periods,
             "indications": args.indications,
             "indications_raw": args.indications_raw,
             "technologies": args.technologies,

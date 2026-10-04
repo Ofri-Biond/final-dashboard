@@ -5,6 +5,8 @@ lives in lib.report_data, shared with the downloadable report (lib/report.py)
 so the two can never disagree about a chart's data.
 """
 
+from dataclasses import replace
+
 import pandas as pd
 import streamlit as st
 
@@ -83,10 +85,38 @@ def _render_players_section(df: pd.DataFrame) -> None:
         _render_players_subsection(dealmakers, "dealmakers", "deal")
 
 
+def _chart_scope(df: pd.DataFrame, filters: FilterState) -> tuple[pd.DataFrame, FilterState] | None:
+    """A chart-only narrowing of the sidebar's time selection: lists the chosen
+    quarters (or years), all pre-selected; removing some narrows only the charts
+    below it, never the sidebar/KPIs/brief. Hidden without a sidebar time filter.
+    None when everything is deselected.
+    """
+    field = "periods" if filters.periods else "years" if filters.years else None
+    if field is None:
+        return df, filters
+
+    options = sorted(getattr(filters, field), reverse=True)
+    chosen = st.multiselect(
+        "Include in the charts below", options=options, default=options,
+        key=f"chart_scope_{field}_{'_'.join(map(str, options))}",  # sidebar change -> fresh "all selected"
+        help="Narrows only the charts below; the sidebar filters stay as they are.",
+    )
+    if not chosen:
+        return None
+    scoped = replace(filters, **{field: tuple(chosen)})
+    return apply_filters(df, scoped), scoped
+
+
 def render_sections(df: pd.DataFrame, filters: FilterState) -> None:
-    _render_trending_section(df, filters)
-    _render_landscape_section(df, filters)
-    _render_players_section(df)
+    states.safe_render("Trends", _render_trending_section, df, filters)
+
+    scope = _chart_scope(df, filters)
+    if scope is None:
+        st.info("Pick at least one period above to see these charts.")
+        return
+    scoped_df, scoped_filters = scope
+    states.safe_render("Market landscape", _render_landscape_section, scoped_df, scoped_filters)
+    states.safe_render("Active players", _render_players_section, scoped_df)
 
 
 def render_raw_data(df: pd.DataFrame) -> None:

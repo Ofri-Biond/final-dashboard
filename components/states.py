@@ -3,6 +3,9 @@ and the raw-data preview frame. Kept tiny and generic so sections.py composes
 them rather than repeating st.plotly_chart/st.caption boilerplate at each call site.
 """
 
+import logging
+from collections.abc import Callable
+
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
@@ -11,6 +14,20 @@ from assets.theme import PLOTLY_CONFIG
 from lib.aggregate import Coverage
 from lib.export import to_excel_bytes
 from lib.filters import FilterState
+
+logger = logging.getLogger(__name__)
+
+
+def safe_render(label: str, render_fn: Callable[..., None], *args) -> None:
+    """Run one page section so its failure can't take the rest of the page down:
+    log the traceback and show a warning in its place. Streamlit's stop/rerun
+    signals are BaseExceptions, so they pass through untouched.
+    """
+    try:
+        render_fn(*args)
+    except Exception:
+        logger.exception("%s failed to render", label)
+        st.warning(f"{label} is temporarily unavailable.")
 
 
 def plot(fig: go.Figure, key: str) -> None:

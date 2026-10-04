@@ -1,12 +1,20 @@
 import pandas as pd
 
-from lib.filters import FilterState, apply_filters, most_restrictive, previous_period
+from lib.filters import (
+    FilterState,
+    apply_filters,
+    data_year_range,
+    most_restrictive,
+    previous_period,
+    selected_years,
+    sync_periods_to_years,
+)
 
 
 def test_url_round_trip_preserves_state():
     state = FilterState(
         years=(2023, 2025),
-        quarters=(3, 4),
+        periods=("2025-Q3", "2023-Q4"),
         indications=("Oncology", "INI"),
         indications_raw=("Immunology",),
         technologies=("Antibody Drug Conjugate",),
@@ -24,7 +32,7 @@ def test_default_state_produces_empty_query():
 
 def test_malformed_query_falls_back_to_defaults():
     restored = FilterState.from_query(
-        {"years": "not-a-year", "quarters": "not-a-quarter", "exclude_mega_deals": "??"}
+        {"years": "not-a-year", "quarters": "3,4", "exclude_mega_deals": "??"}
     )
     assert restored == FilterState(exclude_mega_deals=True)
 
@@ -33,7 +41,7 @@ def test_active_count_reflects_non_default_fields():
     assert FilterState().active_count == 0
     assert FilterState(years=(2023, 2024)).active_count == 1
     assert FilterState(years=(2023, 2024), technologies=("ADC",)).active_count == 2
-    assert FilterState(quarters=(3, 4)).active_count == 1
+    assert FilterState(periods=("2026-Q1", "2025-Q3")).active_count == 1
     assert FilterState(exclude_mega_deals=False).active_count == 1
 
 
@@ -43,7 +51,7 @@ def _deals_frame() -> pd.DataFrame:
             {
                 "record_id": "a",
                 "year": 2023,
-                "quarter": 1,
+                "period": "2023-Q1",
                 "technologies": ["ADC"],
                 "technologies_raw": ["Antibody Drug Conjugate"],
                 "indications": ["Oncology"],
@@ -56,7 +64,7 @@ def _deals_frame() -> pd.DataFrame:
             {
                 "record_id": "b",
                 "year": 2024,
-                "quarter": 3,
+                "period": "2024-Q3",
                 "technologies": ["Small molecule"],
                 "technologies_raw": ["Small Molecule"],
                 "indications": ["INI"],
@@ -69,7 +77,7 @@ def _deals_frame() -> pd.DataFrame:
             {
                 "record_id": "c",
                 "year": None,
-                "quarter": None,
+                "period": None,
                 "technologies": ["ADC"],
                 "technologies_raw": ["ADCs"],  # same group as a, different raw token
                 "indications": ["INI"],
@@ -95,16 +103,24 @@ def test_year_filter_accepts_a_discontiguous_set_of_specific_years():
     assert set(result["record_id"]) == {"a", "c"}  # a matches, c is undated
 
 
-def test_quarter_filter_never_drops_rows_with_no_quarter():
+def test_period_filter_never_drops_undated_rows():
     df = _deals_frame()
-    result = apply_filters(df, FilterState(quarters=(3,)))
-    assert set(result["record_id"]) == {"b", "c"}  # b matches, c has no quarter
+    result = apply_filters(df, FilterState(periods=("2024-Q3",)))
+    assert set(result["record_id"]) == {"b", "c"}  # b matches, c has no period
 
 
-def test_year_and_quarter_filters_combine_with_and():
+def test_periods_from_different_years_mix_without_cross_product():
     df = _deals_frame()
-    result = apply_filters(df, FilterState(years=(2024,), quarters=(3,)))
-    assert set(result["record_id"]) == {"b", "c"}  # b matches both, c is undated
+    # 2023-Q1 + 2024-Q3 selected: not 2023-Q3 or 2024-Q1 (which year x quarter lists would add).
+    df = pd.concat([df, df.iloc[[0]].assign(record_id="d", year=2023, period="2023-Q3")])
+    result = apply_filters(df, FilterState(periods=("2023-Q1", "2024-Q3")))
+    assert set(result["record_id"]) == {"a", "b", "c"}  # d (2023-Q3) is excluded
+
+
+def test_year_and_period_filters_combine_with_and():
+    df = _deals_frame()
+    result = apply_filters(df, FilterState(years=(2023,), periods=("2024-Q3",)))
+    assert set(result["record_id"]) == {"c"}  # a fails the period, b fails the year
 
 
 def test_list_column_filter_matches_on_overlap():
@@ -192,3 +208,42 @@ def test_most_restrictive_respects_n():
     filters = FilterState(technologies=("ADC",), geographies=("China",), phases=("Phase 1",))
     result = most_restrictive(df, filters, n=1)
     assert len(result) == 1
+
+
+def test_previous_period_shifts_selected_quarters_back_one_year():
+    prev = previous_period(FilterState(periods=("2026-Q1", "2025-Q3")), (2022, 2026))
+    assert prev == FilterState(periods=("2025-Q1", "2024-Q3"))
+
+
+def test_previous_period_drops_quarters_before_the_data_and_is_none_if_all_do():
+    filters = FilterState(periods=("2023-Q1", "2022-Q3"))
+    assert previous_period(filters, (2022, 2026)) == FilterState(periods=("2022-Q1",))
+    assert previous_period(FilterState(periods=("2022-Q3",)), (2022, 2026)) is None
+
+
+def test_selected_years_comes_from_years_or_else_periods():
+    assert selected_years(FilterState()) == ()
+    assert selected_years(FilterState(years=(2025, 2023))) == (2023, 2025)
+    assert selected_years(FilterState(periods=("2026-Q1", "2025-Q3"))) == (2025, 2026)
+
+
+def test_data_year_range_handles_no_dated_rows():
+    assert data_year_range(_deals_frame()) == (2023, 2024)
+    assert data_year_range(pd.DataFrame({"year": [None, None]})) == (0, 0)
+
+
+_AVAILABLE = ("2025-Q1", "2025-Q2", "2025-Q3", "2022-Q1", "2022-Q2", "2022-Q3", "2022-Q4")
+
+
+def test_adding_a_year_adds_all_its_quarters():
+    result = sync_periods_to_years([2025, 2022], ["2025-Q1"], _AVAILABLE)
+    assert result == ("2025-Q1", "2022-Q4", "2022-Q3", "2022-Q2", "2022-Q1")
+
+
+def test_removing_a_year_drops_its_quarters_and_keeps_trimmed_ones():
+    result = sync_periods_to_years([2025], ["2025-Q1", "2022-Q2"], _AVAILABLE)
+    assert result == ("2025-Q1",)  # 2025 stays trimmed to Q1, not refilled
+
+
+def test_empty_quarter_selection_is_left_alone():
+    assert sync_periods_to_years([2025, 2022], [], _AVAILABLE) == ()

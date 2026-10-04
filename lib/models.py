@@ -63,6 +63,7 @@ class Deal:
     deal_date: date | None
     year: int | None
     quarter: int | None
+    period: str | None  # "2026-Q1" -- the filterable year+quarter pair
     source_url: str | None
     related_publications: str | None
     comment: str | None
