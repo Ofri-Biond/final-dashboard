@@ -15,13 +15,21 @@ import streamlit as st
 
 from assets import theme
 from components.states import clear_filters
-from lib.data import get_sync_state, load_deals, load_extras, sync_extras_now, sync_now
+from lib.data import dictionary_categories, get_sync_state, load_deals, load_extras, sync_extras_now, sync_now
 from lib.filters import FilterState, apply_filters, sync_periods_to_years
 from lib.models import PHASE_ORDER
 
 
 def _list_options(df: pd.DataFrame, column: str) -> list[str]:
     return sorted(df[column].explode().dropna().unique().tolist())
+
+
+def _category_options(df: pd.DataFrame, column: str, dictionary: str) -> list[str]:
+    """Only real main categories from the dictionary YAML -- an unmapped raw value
+    passes through normalize() under its own label, but it's a sub-category, not a
+    category, so it's offered in the sub-category filter only."""
+    categories = dictionary_categories(dictionary)
+    return [value for value in _list_options(df, column) if value in categories]
 
 
 def _phase_options(df: pd.DataFrame) -> list[str]:
@@ -59,22 +67,33 @@ def render_sidebar(df: pd.DataFrame) -> FilterState:
             "Quarter", options=_period_options(df, years), key="periods", bind="query-params",
             help="Pick specific quarters of specific years -- e.g. 2026-Q1 and 2025-Q3.",
         )
+        if years or periods:
+            st.caption(":material/info: Deals with no date are left out while a year or quarter is selected.")
+        technologies = st.multiselect(
+            "Technology category", options=_category_options(df, "technologies", "technology"),
+            key="technologies", bind="query-params",
+        )
         technologies_raw = st.multiselect(
-            "Technology", options=_list_options(df, "technologies_raw"),
+            "Technology sub-category", options=_list_options(df, "technologies_raw"),
             key="technologies_raw", bind="query-params",
         )
+        deal_types = st.multiselect(
+            "Deal type category", options=_category_options(df, "deal_type_groups", "deal_type"),
+            key="deal_types", bind="query-params",
+        )
         deal_types_raw = st.multiselect(
-            "Deal type", options=_list_options(df, "deal_types"),
+            "Deal type sub-category", options=_list_options(df, "deal_types"),
             key="deal_types_raw", bind="query-params",
         )
 
         # Phase/geography/indication options narrow to what's still reachable once
-        # year + quarter + technology + deal type are picked (dependent options).
+        # year + quarter + technology + deal type (category or sub-category) are picked (dependent options).
         scoped = apply_filters(
             df,
             FilterState(
                 years=tuple(years), periods=tuple(periods),
-                technologies_raw=tuple(technologies_raw), deal_types_raw=tuple(deal_types_raw),
+                technologies=tuple(technologies), technologies_raw=tuple(technologies_raw),
+                deal_types=tuple(deal_types), deal_types_raw=tuple(deal_types_raw),
             ),
         )
         geographies = st.multiselect(
@@ -96,7 +115,9 @@ def render_sidebar(df: pd.DataFrame) -> FilterState:
         filters = FilterState(
             years=tuple(years),
             periods=tuple(periods),
+            technologies=tuple(technologies),
             technologies_raw=tuple(technologies_raw),
+            deal_types=tuple(deal_types),
             deal_types_raw=tuple(deal_types_raw),
             geographies=tuple(geographies),
             phases=tuple(phases),

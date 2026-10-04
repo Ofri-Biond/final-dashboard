@@ -4,28 +4,28 @@ from dataclasses import dataclass, field, replace
 import pandas as pd
 
 # Every filter field: (state field, deal column it filters, is that column a list?,
-# does an unknown/null value on that column always pass this filter?, the type its
-# values parse to). The single source of truth for from_query/to_query/active_count/
+# the type its values parse to). The single source of truth for from_query/to_query/active_count/
 # apply_filters/most_restrictive below, so adding a filter is a one-line change to
 # this table alone.
 # A "_raw" field filters the dictionary-unmapped value (e.g. "Option to license")
 # independently of its mapped group (e.g. "License") -- both may be set at once and
 # combine with AND, like any other pair of filters.
-# years/periods allow null passthrough: undated rows (year/period is None) always
-# pass those filters. A period is a specific quarter of a specific year ("2026-Q1"),
-# so periods from different years mix freely -- unlike independent year + quarter lists.
-# Undated rows are never silently dropped by narrowing a selection.
+# A period is a specific quarter of a specific year ("2026-Q1"), so periods from
+# different years mix freely -- unlike independent year + quarter lists.
+# Like any filter, a year/period filter keeps only rows that match: undated deals
+# (year/period is None) are excluded once a time filter is set, and appear only
+# in views without one.
 _FILTER_COLUMNS = [
-    ("years", "year", False, True, int),
-    ("periods", "period", False, True, str),
-    ("indications", "indications", True, False, str),
-    ("indications_raw", "indications_raw", True, False, str),
-    ("technologies", "technologies", True, False, str),
-    ("technologies_raw", "technologies_raw", True, False, str),
-    ("deal_types", "deal_type_groups", True, False, str),
-    ("deal_types_raw", "deal_types", True, False, str),
-    ("geographies", "based_at", False, False, str),
-    ("phases", "phase", False, False, str),
+    ("years", "year", False, int),
+    ("periods", "period", False, str),
+    ("indications", "indications", True, str),
+    ("indications_raw", "indications_raw", True, str),
+    ("technologies", "technologies", True, str),
+    ("technologies_raw", "technologies_raw", True, str),
+    ("deal_types", "deal_type_groups", True, str),
+    ("deal_types_raw", "deal_types", True, str),
+    ("geographies", "based_at", False, str),
+    ("phases", "phase", False, str),
 ]
 _MULTISELECT_FIELDS = [state_field for state_field, *_ in _FILTER_COLUMNS]
 
@@ -36,10 +36,10 @@ _FIELD_LABELS: dict[str, str] = {
     "periods": "Quarter",
     "indications": "Indication",
     "indications_raw": "Indication (raw)",
-    "technologies": "Technology",
-    "technologies_raw": "Technology (raw)",
-    "deal_types": "Deal type",
-    "deal_types_raw": "Deal type (raw)",
+    "technologies": "Technology category",
+    "technologies_raw": "Technology sub-category",
+    "deal_types": "Deal type category",
+    "deal_types_raw": "Deal type sub-category",
     "geographies": "Geography",
     "phases": "Phase",
 }
@@ -63,7 +63,7 @@ class FilterState:
     def from_query(cls, params: Mapping[str, str]) -> "FilterState":
         kwargs = {
             state_field: _parse_list(params.get(state_field), value_type)
-            for state_field, _, _, _, value_type in _FILTER_COLUMNS
+            for state_field, _, _, value_type in _FILTER_COLUMNS
         }
         return cls(
             exclude_mega_deals=_parse_bool(params.get("exclude_mega_deals"), default=True),
@@ -110,7 +110,7 @@ def _parse_bool(raw: str | None, default: bool) -> bool:
 def apply_filters(df: pd.DataFrame, filters: FilterState) -> pd.DataFrame:
     mask = pd.Series(True, index=df.index)
 
-    for state_field, column, is_list_column, allow_null, _value_type in _FILTER_COLUMNS:
+    for state_field, column, is_list_column, _value_type in _FILTER_COLUMNS:
         selected = getattr(filters, state_field)
         if not selected:
             continue
@@ -121,8 +121,6 @@ def apply_filters(df: pd.DataFrame, filters: FilterState) -> pd.DataFrame:
             )
         else:
             col_mask = df[column].isin(selected_set)
-        if allow_null:
-            col_mask = col_mask | df[column].isna()
         mask &= col_mask
 
     return df[mask]
@@ -184,6 +182,17 @@ def previous_period(filters: FilterState, data_years: tuple[int, int]) -> Filter
         return None
     prev_start = max(prev_end - length + 1, data_years[0])
     return replace(filters, years=tuple(range(prev_start, prev_end + 1)))
+
+
+def period_label(filters: FilterState) -> str:
+    """A short name for the time a FilterState covers, e.g. "2025-Q1, 2024-Q3" or
+    "2022–2023" -- for telling the user what a KPI delta compares against."""
+    if filters.periods:
+        return ", ".join(sorted(filters.periods, reverse=True))
+    years = selected_years(filters)
+    if not years:
+        return "all years"
+    return str(years[0]) if years[0] == years[-1] else f"{years[0]}–{years[-1]}"
 
 
 _DESCRIBE_MAX_VALUES = 4

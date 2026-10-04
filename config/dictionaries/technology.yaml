@@ -76,3 +76,57 @@
   - Imaging platform
   - Proteomics
   - Mass spectrometry
+
+# Values not yet given a specific category -- grouped here so the Technology
+# category filter and charts can reach them. Move one into a specific category above
+# once it has a proper home.
+"Other":
+  - Adeno virus AAV
+  - allogeneic stem cell
+  - arenaviral
+  - Autoimmunity
+  - Bacterial delivery
+  - botanical compounds
+  - Cell Penetrating Alphabodies
+  - Cell therapy
+  - CRISPR
+  - CRISPRomics
+  - Cytokine
+  - DDR
+  - Drug delivery
+  - EGFR inhibitor
+  - Epigenetic editor delivered via viral vector
+  - Epigenetics
+  - "Exosome-based therapy"
+  - Gene editing
+  - Hyaluronidase
+  - IO
+  - iPS
+  - Jumping genes (transposable elements)
+  - Lentiviral
+  - Lipid nanoparticles
+  - Liquid Biopsy
+  - "Long Non-Coding RNAs"
+  - "long-acting injectables"
+  - masking technology
+  - Mice
+  - Modified bacterial strains
+  - mRNA
+  - Oligonucleotides
+  - Other
+  - photoimmunotherapy
+  - protein
+  - RNA delivery
+  - RNA therapy manufacturing
+  - RNAi
+  - ROCK inhibitor
+  - Single cell RNA
+  - siRNA
+  - Synthetic biology
+  - Synthetic lethality
+  - T cell activator
+  - T cells
+  - Treg cell therapies
+  - "Tumor-specific antigens"
+  - UCN2 analog
+  - XPATs

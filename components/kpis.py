@@ -30,7 +30,11 @@ def _delta(current: float | None, previous: float | None) -> str | None:
     return f"{(current - previous) / previous * 100:+.1f}%"
 
 
-def render_kpis(df: pd.DataFrame, prev_df: pd.DataFrame | None, filters: FilterState) -> None:
+def render_kpis(
+    df: pd.DataFrame, prev_df: pd.DataFrame | None, filters: FilterState, compared_to: str | None
+) -> None:
+    """`compared_to` names the earlier period the % deltas are measured against
+    (None when there is no earlier period), explained under the Deals card."""
     for column, (label, measure, value_col, chart_type) in zip(st.columns(4), _CARDS, strict=True):
         with column:
             current = summarize(df, measure, value_col, exclude_mega=filters.exclude_mega_deals)
@@ -51,3 +55,7 @@ def render_kpis(df: pd.DataFrame, prev_df: pd.DataFrame | None, filters: FilterS
             )
             if value_col is not None:
                 st.caption(current.coverage.note())
+            elif compared_to is not None:
+                st.caption(f"% = change vs. {compared_to}, with the same filters.")
+            else:
+                st.caption("No earlier period to compare with.")

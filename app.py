@@ -16,6 +16,7 @@ from lib.filters import (
     apply_filters,
     data_year_range,
     most_restrictive,
+    period_label,
     previous_period,
 )
 
@@ -56,7 +57,8 @@ if filtered.empty:
 prev_filters = previous_period(filters, data_year_range(deals))
 prev_deals = apply_filters(deals, prev_filters) if prev_filters is not None else None
 
-safe_render("Key metrics", render_kpis, filtered, prev_deals, filters)
+compared_to = period_label(prev_filters) if prev_filters is not None else None
+safe_render("Key metrics", render_kpis, filtered, prev_deals, filters, compared_to)
 safe_render("AI market brief", render_brief, filtered, deals, filters)
 render_sections(filtered, filters)
 safe_render("Raw data preview", render_raw_data, filtered)

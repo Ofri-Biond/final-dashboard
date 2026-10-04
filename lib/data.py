@@ -34,6 +34,11 @@ def _dictionaries():
     return load_dictionaries(DICTIONARIES_DIR)
 
 
+def dictionary_categories(name: str) -> frozenset[str]:
+    """The main categories defined in config/dictionaries/<name>.yaml."""
+    return _dictionaries()[name].categories
+
+
 @st.cache_data(ttl=900)
 def load_deals() -> pd.DataFrame:
     settings = load_settings()

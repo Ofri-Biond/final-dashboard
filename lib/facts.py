@@ -12,9 +12,7 @@ pack so they can't be confused:
 - `periods`/`candidate_misses` compare two trailing-12-month windows anchored
   on the latest deal_date in the whole dataset, not on the year filter. This is
   deliberate: previous_period() returns None on the unfiltered view (the data
-  spans 2010-2026, so there's no year before 2010 to compare against), and the
-  year filter lets undated deals through on both sides of any comparison
-  (lib/filters.py's allow_null=True), which would silently damp every delta.
+  spans 2010-2026, so there's no year before 2010 to compare against).
   Trailing-date windows exist on every view and never include undated rows.
 """
 

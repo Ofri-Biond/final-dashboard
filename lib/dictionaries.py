@@ -14,6 +14,7 @@ class Dictionary:
             for raw in raw_values:
                 self._canonical_by_raw[raw.strip().lower()] = canonical
         self.unmapped: Counter[str] = Counter()
+        self.categories: frozenset[str] = frozenset(mapping)
 
     def lookup(self, raw: str) -> str | None:
         """Like `map`, but a miss returns None instead of the raw value, and is
